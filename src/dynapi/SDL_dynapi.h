@@ -59,6 +59,8 @@
 #define SDL_DYNAMIC_API 0  /* Turn off for static analysis, so reports are more clear. */
 #elif defined(__VITA__)
 #define SDL_DYNAMIC_API 0  /* vitasdk doesn't support dynamic linking */
+#elif defined(GEKKO) || defined(__NDS__) || defined(__3DS__) || defined(__WIIU__)
+#define SDL_DYNAMIC_API 0  /* devkitPro doesn't support dynamic linking */
 #elif defined(DYNAPI_NEEDS_DLOPEN) && !defined(HAVE_DLOPEN)
 #define SDL_DYNAMIC_API 0  /* we need dlopen(), but don't have it.... */
 #endif
