@@ -47,6 +47,11 @@
 static struct SDL_AudioDevice *s_callback_data[8];
 
 
+static void OGCAUD_Deinitialize(void)
+{
+    ASND_End();
+}
+
 static int
 OGCAUD_OpenDevice(_THIS, const char *devname)
 {
@@ -121,10 +126,12 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     }
 
     this->hidden->channel = 0;
+    this->hidden->first_time = 1;
 
-    ASND_ChangeVolumeVoice(0, SCE_AUDIO_MAX_VOLUME, SCE_AUDIO_MAX_VOLUME);
+    this->hidden->queue = LWP_TQUEUE_NULL;
+    this->hidden->flag = 0;
 
-    ASND_Init();
+    LWP_InitQueue(&this->hidden->queue);
 
     SDL_memset(this->hidden->rawbuf, 0, mixlen);
     for (i = 0; i < NUM_BUFFERS; i++) {
@@ -132,40 +139,59 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     }
 
     s_callback_data[this->hidden->channel] = this;
-
     this->hidden->next_buffer = 0;
+    this->hidden->cur_buffer = 0;
+
+    ASND_Init();
+    ASND_ChangeVolumeVoice(this->hidden->channel, SCE_AUDIO_MAX_VOLUME, SCE_AUDIO_MAX_VOLUME);
+    ASND_Pause(0);
+
     return 0;
 }
 
 static void ogc_play_callback(int voice)
 {
     struct SDL_AudioDevice *this = s_callback_data[voice];
-    this->hidden->next_buffer = (this->hidden->next_buffer + 1) % NUM_BUFFERS;
+    if (!this) {
+        return;
+    }
+
+    this->hidden->flag = 0;
+    LWP_ThreadSignal(this->hidden->queue);
 }
 
 static void OGCAUD_PlayDevice(_THIS)
 {
     Uint8 *mixbuf = this->hidden->mixbufs[this->hidden->next_buffer];
 
-    ASND_SetVoice(this->hidden->channel,
-                  this->hidden->output_type,
-                  this->spec.freq, 0,
-                  mixbuf,
-                  this->spec.size,
-                  this->hidden->volume,
-                  this->hidden->volume,
-                  ogc_play_callback);
+    this->hidden->cur_buffer = this->hidden->next_buffer;
+
+    if(ASND_StatusVoice(this->hidden->channel) == SND_UNUSED || this->hidden->first_time) {
+
+        this->hidden->first_time = 0;
+
+        ASND_SetVoice(this->hidden->channel,
+                      this->hidden->output_type,
+                      this->spec.freq, 0,
+                      mixbuf,
+                      this->spec.size,
+                      this->hidden->volume,
+                      this->hidden->volume,
+                      ogc_play_callback);
+    } else {
+        ASND_AddVoice(this->hidden->channel, mixbuf, this->spec.size);
+    }
+
+    this->hidden->flag = 1;
+    this->hidden->next_buffer = (this->hidden->next_buffer + 1) % NUM_BUFFERS;
 }
 
 /* This function waits until it is possible to write a full sound buffer */
 static void OGCAUD_WaitDevice(_THIS)
 {
-    const int needed = this->spec.samples;
-    while(ASND_TestPointer(this->hidden->channel, this->hidden->mixbufs[this->hidden->next_buffer]) &&
-          ASND_StatusVoice(this->hidden->channel) != SND_UNUSED) {
-        const Uint32 delay = ((needed) * 1000) / this->spec.freq;
-        SDL_Delay(SDL_max(delay, 10));
-        continue;
+    if(ASND_TestPointer(this->hidden->channel, this->hidden->mixbufs[this->hidden->cur_buffer]) &&
+       ASND_StatusVoice(this->hidden->channel) != SND_UNUSED) {
+        LWP_ThreadSleep(this->hidden->queue);
     }
 }
 
@@ -176,7 +202,14 @@ static Uint8 *OGCAUD_GetDeviceBuf(_THIS)
 
 static void OGCAUD_CloseDevice(_THIS)
 {
-    ASND_End();
+    ASND_StopVoice(this->hidden->channel);
+
+    if(this->hidden->queue != LWP_TQUEUE_NULL)
+    {
+        LWP_ThreadSignal(this->hidden->queue);
+        LWP_CloseQueue(this->hidden->queue);
+        this->hidden->queue = LWP_TQUEUE_NULL;
+    }
 
     if (this->hidden->rawbuf != NULL) {
         free(this->hidden->rawbuf);         /* this uses memalign(), not SDL_malloc(). */
@@ -185,6 +218,7 @@ static void OGCAUD_CloseDevice(_THIS)
 
     s_callback_data[this->hidden->channel] = 0;
     SDL_free(this->hidden);
+    this->hidden = NULL;
 }
 
 static void OGCAUD_ThreadInit(_THIS)
@@ -203,6 +237,7 @@ OGCAUD_Init(SDL_AudioDriverImpl * impl)
     impl->WaitDevice = OGCAUD_WaitDevice;
     impl->GetDeviceBuf = OGCAUD_GetDeviceBuf;
     impl->CloseDevice = OGCAUD_CloseDevice;
+    impl->Deinitialize = OGCAUD_Deinitialize;
     impl->ThreadInit = OGCAUD_ThreadInit;
 
     /* VITA audio device */

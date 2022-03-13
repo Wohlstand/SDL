@@ -27,6 +27,8 @@
 /* Hidden "this" pointer for the audio functions */
 #define _THIS   SDL_AudioDevice *this
 
+typedef Uint32 lwpq_t;
+
 #define NUM_BUFFERS 2
 
 struct SDL_PrivateAudioData {
@@ -42,8 +44,13 @@ struct SDL_PrivateAudioData {
     Uint8   *rawbuf;
     /* Individual mixing buffers. */
     Uint8   *mixbufs[NUM_BUFFERS];
+    int     first_time;
+    /* Waiting */
+    lwpq_t  queue;
     /* Index of the next available mixing buffer. */
     int     next_buffer;
+    /* Currently playing buffer */
+    int     cur_buffer;
 };
 
 #endif /* _SDL_vitaaudio_h */
