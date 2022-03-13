@@ -154,6 +154,8 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "BeOS.*")
   message_error("BeOS support has been removed as of SDL 2.0.2.")
 elseif(CMAKE_SYSTEM_NAME MATCHES "Haiku.*")
   set(HAIKU TRUE)
+elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
+  set(WII TRUE)
 endif()
 
 # Don't mistake osx for unix
@@ -229,7 +231,7 @@ if(APPLE OR ARCH_64 OR MSVC_CLANG)
     set(OPT_DEF_SSEMATH ON)
   endif()
 endif()
-if(UNIX OR MINGW OR MSYS OR (USE_CLANG AND NOT WINDOWS) OR VITA OR PSP)
+if(UNIX OR MINGW OR MSYS OR (USE_CLANG AND NOT WINDOWS) OR VITA OR PSP OR WII)
   set(OPT_DEF_LIBC ON)
 endif()
 
@@ -333,7 +335,7 @@ if(EMSCRIPTEN)
   set(SDL_CPUINFO_ENABLED_BY_DEFAULT OFF)
 endif()
 
-if(VITA OR PSP)
+if(VITA OR PSP OR WII)
   set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
   set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
 endif()
@@ -2460,6 +2462,37 @@ elseif(PSP)
       pspvram
       GL
     )
+
+elseif(WII)
+
+  if(SDL_AUDIO)
+    set(SDL_AUDIO_DRIVER_OGC 1)
+    file(GLOB OGC_AUDIO_SOURCES ${SDL2_SOURCE_DIR}/src/audio/ogc/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${OGC_AUDIO_SOURCES})
+    set(HAVE_SDL_AUDIO TRUE)
+  endif()
+  if(SDL_THREADS)
+    set(SDL_THREAD_OGC 1)
+    set(SOURCE_FILES ${SOURCE_FILES}
+      ${SDL2_SOURCE_DIR}/src/thread/ogc/SDL_sysmutex.c
+      ${SDL2_SOURCE_DIR}/src/thread/ogc/SDL_syssem.c
+      ${SDL2_SOURCE_DIR}/src/thread/ogc/SDL_systhread.c
+      ${SDL2_SOURCE_DIR}/src/thread/ogc/SDL_syscond.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c)
+    set(HAVE_SDL_THREADS TRUE)
+  endif()
+  if(SDL_TIMERS)
+    set(SDL_TIMER_UNIX 1)
+    file(GLOB OGC_TIMER_SOURCES ${SDL2_SOURCE_DIR}/src/timer/unix/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${OGC_TIMER_SOURCES})
+    set(HAVE_SDL_TIMERS TRUE)
+  endif()
+  if(SDL_FILESYSTEM)
+    set(SDL_FILESYSTEM_WII 1)
+    file(GLOB FILESYSTEM_SOURCES ${SDL2_SOURCE_DIR}/src/filesystem/wii/*.c)
+    set(SOURCE_FILES ${SOURCE_FILES} ${FILESYSTEM_SOURCES})
+    set(HAVE_SDL_FILESYSTEM TRUE)
+  endif()
 
 elseif(OS2)
   list(APPEND EXTRA_CFLAGS "-DOS2EMX_PLAIN_CHAR")

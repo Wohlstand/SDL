@@ -319,6 +319,7 @@
 #cmakedefine SDL_AUDIO_DRIVER_OS2 @SDL_AUDIO_DRIVER_OS2@
 #cmakedefine SDL_AUDIO_DRIVER_VITA @SDL_AUDIO_DRIVER_VITA@
 #cmakedefine SDL_AUDIO_DRIVER_PSP @SDL_AUDIO_DRIVER_PSP@
+#cmakedefine SDL_AUDIO_DRIVER_OGC @SDL_AUDIO_DRIVER_OGC@
 
 /* Enable various input drivers */
 #cmakedefine SDL_INPUT_LINUXEV @SDL_INPUT_LINUXEV@
@@ -373,6 +374,7 @@
 #cmakedefine SDL_THREAD_OS2 @SDL_THREAD_OS2@
 #cmakedefine SDL_THREAD_VITA @SDL_THREAD_VITA@
 #cmakedefine SDL_THREAD_PSP @SDL_THREAD_PSP@
+#cmakedefine SDL_THREAD_OGC @SDL_THREAD_OGC@
 
 /* Enable various timer systems */
 #cmakedefine SDL_TIMER_HAIKU @SDL_TIMER_HAIKU@
@@ -382,6 +384,7 @@
 #cmakedefine SDL_TIMER_OS2 @SDL_TIMER_OS2@
 #cmakedefine SDL_TIMER_VITA @SDL_TIMER_VITA@
 #cmakedefine SDL_TIMER_PSP @SDL_TIMER_PSP@
+#cmakedefine SDL_TIMER_OGC @SDL_TIMER_OGC@
 
 /* Enable various video drivers */
 #cmakedefine SDL_VIDEO_DRIVER_ANDROID @SDL_VIDEO_DRIVER_ANDROID@
@@ -492,6 +495,7 @@
 #cmakedefine SDL_FILESYSTEM_OS2 @SDL_FILESYSTEM_OS2@
 #cmakedefine SDL_FILESYSTEM_VITA @SDL_FILESYSTEM_VITA@
 #cmakedefine SDL_FILESYSTEM_PSP @SDL_FILESYSTEM_PSP@
+#cmakedefine SDL_FILESYSTEM_WII @SDL_FILESYSTEM_WII@
 
 /* Enable misc subsystem */
 #cmakedefine SDL_MISC_DUMMY @SDL_MISC_DUMMY@
