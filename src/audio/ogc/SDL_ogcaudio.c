@@ -86,7 +86,7 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
             }
         case 16:
             if(SDL_AUDIO_ISSIGNED(this->spec.format)) {
-                this->spec.format = AUDIO_S16LSB;
+                this->spec.format = AUDIO_S16SYS;
                 if (this->spec.channels == 1) {
                     this->hidden->output_type = VOICE_MONO_16BIT;
                 } else {
