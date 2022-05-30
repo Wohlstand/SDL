@@ -65,7 +65,7 @@ WIN_InitKeyboard(_THIS)
     data->ime_hwnd_current = 0;
     data->ime_himc = 0;
     data->ime_composition_length = 32 * sizeof(WCHAR);
-    data->ime_composition = (WCHAR*)SDL_malloc(data->ime_composition_length);
+    data->ime_composition = (WCHAR*)SDL_malloc(data->ime_composition_length + sizeof(WCHAR));
     data->ime_composition[0] = 0;
     data->ime_readingstring[0] = 0;
     data->ime_cursor = 0;
@@ -276,26 +276,17 @@ WIN_SetTextInputRect(_THIS, SDL_Rect *rect)
     }
 }
 
+
+#ifdef SDL_DISABLE_WINDOWS_IME
+
 void WIN_ClearComposition(_THIS)
 {
-    SDL_VideoData *videodata = (SDL_VideoData *)_this->driverdata;
-    IME_ClearComposition(videodata);
 }
 
 SDL_bool WIN_IsTextInputShown(_THIS)
 {
-    SDL_VideoData* videodata = (SDL_VideoData*)_this->driverdata;
-    return IME_IsTextInputShown(videodata);
+    return SDL_FALSE;
 }
-
-static SDL_bool
-WIN_ShouldShowNativeUI()
-{
-    return SDL_GetHintBoolean(SDL_HINT_IME_SHOW_UI, SDL_FALSE);
-}
-
-#ifdef SDL_DISABLE_WINDOWS_IME
-
 
 SDL_bool
 IME_HandleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM *lParam, SDL_VideoData *videodata)
@@ -377,6 +368,12 @@ static SDL_bool UILess_SetupSinks(SDL_VideoData *videodata);
 static void UILess_ReleaseSinks(SDL_VideoData *videodata);
 static void UILess_EnableUIUpdates(SDL_VideoData *videodata);
 static void UILess_DisableUIUpdates(SDL_VideoData *videodata);
+
+static SDL_bool
+WIN_ShouldShowNativeUI()
+{
+    return SDL_GetHintBoolean(SDL_HINT_IME_SHOW_UI, SDL_FALSE);
+}
 
 static void
 IME_Init(SDL_VideoData *videodata, HWND hwnd)
@@ -796,10 +793,10 @@ IME_GetCompositionString(SDL_VideoData *videodata, HIMC himc, DWORD string)
     videodata->ime_cursor = LOWORD(ImmGetCompositionStringW(himc, GCS_CURSORPOS, 0, 0));
     if ((dwLang == LANG_CHT || dwLang == LANG_CHS) &&
         videodata->ime_cursor > 0 &&
-        videodata->ime_cursor < videodata->ime_composition_length / sizeof(WCHAR) &&
+        videodata->ime_cursor < (int)(videodata->ime_composition_length / sizeof(WCHAR)) &&
         (videodata->ime_composition[0] == 0x3000 || videodata->ime_composition[0] == 0x0020)) {
         // Traditional Chinese IMEs add a placeholder U+3000
-        // Simplified Chinese IMEs seem to add a placholder U+0020 sometimes
+        // Simplified Chinese IMEs seem to add a placeholder U+0020 sometimes
         int i;
         for (i = videodata->ime_cursor + 1; i < length; ++i)
             videodata->ime_composition[i - 1] = videodata->ime_composition[i];
@@ -816,7 +813,7 @@ IME_GetCompositionString(SDL_VideoData *videodata, HIMC himc, DWORD string)
 
         length = ImmGetCompositionStringW(himc, GCS_COMPATTR, NULL, 0);
         if (length > 0) {
-            Uint8* attributes = (Uint8*)SDL_malloc(length);
+            Uint8* attributes = (Uint8*)SDL_malloc(length + sizeof(WCHAR));
             ImmGetCompositionString(himc, GCS_COMPATTR, attributes, length);
 
             for (start = 0; start < length; ++start) {
@@ -866,7 +863,7 @@ IME_SendEditingEvent(SDL_VideoData *videodata)
         size_t len = SDL_min(SDL_wcslen(videodata->ime_composition), (size_t)videodata->ime_cursor);
 
         size += sizeof(videodata->ime_readingstring);
-        buffer = (WCHAR*)SDL_malloc(size);
+        buffer = (WCHAR*)SDL_malloc(size + sizeof(WCHAR));
         buffer[0] = 0;
 
         SDL_wcslcpy(buffer, videodata->ime_composition, len + 1);
@@ -874,7 +871,7 @@ IME_SendEditingEvent(SDL_VideoData *videodata)
         SDL_wcslcat(buffer, &videodata->ime_composition[len], size);
     }
     else {
-        buffer = (WCHAR*)SDL_malloc(size);
+        buffer = (WCHAR*)SDL_malloc(size + sizeof(WCHAR));
         buffer[0] = 0;
         SDL_wcslcpy(buffer, videodata->ime_composition, size);
     }
@@ -1712,6 +1709,18 @@ void IME_Present(SDL_VideoData *videodata)
         IME_Render(videodata);
 
     /* FIXME: Need to show the IME bitmap */
+}
+
+SDL_bool WIN_IsTextInputShown(_THIS)
+{
+    SDL_VideoData* videodata = (SDL_VideoData*)_this->driverdata;
+    return IME_IsTextInputShown(videodata);
+}
+
+void WIN_ClearComposition(_THIS)
+{
+    SDL_VideoData *videodata = (SDL_VideoData *)_this->driverdata;
+    IME_ClearComposition(videodata);
 }
 
 #endif /* SDL_DISABLE_WINDOWS_IME */

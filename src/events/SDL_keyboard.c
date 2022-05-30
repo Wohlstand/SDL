@@ -282,6 +282,10 @@ static const SDL_Keycode SDL_default_keymap[SDL_NUM_SCANCODES] = {
     SDLK_APP2,
     SDLK_AUDIOREWIND,
     SDLK_AUDIOFASTFORWARD,
+    SDLK_SOFTLEFT,
+    SDLK_SOFTRIGHT,
+    SDLK_CALL,
+    SDLK_ENDCALL,
 };
 
 static const char *SDL_scancode_names[SDL_NUM_SCANCODES] = {
@@ -518,6 +522,10 @@ static const char *SDL_scancode_names[SDL_NUM_SCANCODES] = {
     "App2",
     "AudioRewind",
     "AudioFastForward",
+    "SoftLeft",
+    "SoftRight",
+    "Call",
+    "EndCall",
 };
 
 /* Taken from SDL_iconv() */
@@ -638,6 +646,7 @@ SDL_SetKeyboardFocus(SDL_Window * window)
         /* old window must lose an existing mouse capture. */
         if (keyboard->focus->flags & SDL_WINDOW_MOUSE_CAPTURE) {
             SDL_CaptureMouse(SDL_FALSE);  /* drop the capture. */
+            SDL_UpdateMouseCapture(SDL_TRUE);
             SDL_assert(!(keyboard->focus->flags & SDL_WINDOW_MOUSE_CAPTURE));
         }
 

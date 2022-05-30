@@ -416,7 +416,10 @@ HIDAPI_UpdateDiscovery()
                     const char *action = NULL;
                     action = usyms->udev_device_get_action(pUdevDevice);
                     if (!action || SDL_strcmp(action, "add") == 0 || SDL_strcmp(action, "remove") == 0) {
-                        ++SDL_HIDAPI_discovery.m_unDeviceChangeCounter;
+                        const char *subsystem = usyms->udev_device_get_subsystem(pUdevDevice);
+                        if (!subsystem || SDL_strcmp(subsystem, "backlight") != 0) {
+                            ++SDL_HIDAPI_discovery.m_unDeviceChangeCounter;
+                        }
                     }
                     usyms->udev_device_unref(pUdevDevice);
                 }
@@ -951,6 +954,7 @@ DeleteHIDDeviceWrapper(SDL_hid_device *device)
     }
 
 #if !SDL_HIDAPI_DISABLED
+#if HAVE_PLATFORM_BACKEND || HAVE_DRIVER_BACKEND || defined(SDL_LIBUSB_DYNAMIC)
 
 #define COPY_IF_EXISTS(var) \
     if (pSrc->var != NULL) { \
@@ -987,6 +991,7 @@ CopyHIDDeviceInfo(struct SDL_hid_device_info *pSrc, struct SDL_hid_device_info *
 #undef COPY_IF_EXISTS
 #undef WCOPY_IF_EXISTS
 
+#endif /* HAVE_PLATFORM_BACKEND || HAVE_DRIVER_BACKEND || SDL_LIBUSB_DYNAMIC */
 #endif /* !SDL_HIDAPI_DISABLED */
 
 static int SDL_hidapi_refcount = 0;
@@ -1185,9 +1190,9 @@ struct SDL_hid_device_info *SDL_hid_enumerate(unsigned short vendor_id, unsigned
 #ifdef SDL_LIBUSB_DYNAMIC
     if (libusb_ctx.libhandle) {
         usb_devs = LIBUSB_hid_enumerate(vendor_id, product_id);
-  #ifdef DEBUG_HIDAPI
+#ifdef DEBUG_HIDAPI
         SDL_Log("libusb devices found:");
-  #endif
+#endif
         for (usb_dev = usb_devs; usb_dev; usb_dev = usb_dev->next) {
             new_dev = (struct SDL_hid_device_info*) SDL_malloc(sizeof(struct SDL_hid_device_info));
             if (!new_dev) {
@@ -1197,11 +1202,11 @@ struct SDL_hid_device_info *SDL_hid_enumerate(unsigned short vendor_id, unsigned
                 return NULL;
             }
             CopyHIDDeviceInfo(usb_dev, new_dev);
-  #ifdef DEBUG_HIDAPI
+#ifdef DEBUG_HIDAPI
             SDL_Log(" - %ls %ls 0x%.4hx 0x%.4hx",
                     usb_dev->manufacturer_string, usb_dev->product_string,
                     usb_dev->vendor_id, usb_dev->product_id);
-  #endif
+#endif
 
             if (last != NULL) {
                 last->next = new_dev;
@@ -1522,7 +1527,7 @@ int SDL_hid_get_indexed_string(SDL_hid_device *device, int string_index, wchar_t
 
 void SDL_hid_ble_scan(SDL_bool active)
 {
-#if __IPHONEOS__ || __TVOS__
+#if !SDL_HIDAPI_DISABLED && (__IPHONEOS__ || __TVOS__)
     hid_ble_scan(active);
 #endif
 }

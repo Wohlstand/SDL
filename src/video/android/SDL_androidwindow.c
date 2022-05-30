@@ -167,6 +167,12 @@ Android_MinimizeWindow(_THIS, SDL_Window *window)
     Android_JNI_MinizeWindow();
 }
 
+void Android_SetWindowResizable(_THIS, SDL_Window *window, SDL_bool resizable)
+{
+    /* Set orientation */
+    Android_JNI_SetOrientation(window->w, window->h, window->flags & SDL_WINDOW_RESIZABLE, SDL_GetHint(SDL_HINT_ORIENTATIONS));
+}
+
 void
 Android_DestroyWindow(_THIS, SDL_Window *window)
 {
@@ -200,8 +206,7 @@ Android_GetWindowWMInfo(_THIS, SDL_Window *window, SDL_SysWMinfo *info)
 {
     SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
 
-    if (info->version.major == SDL_MAJOR_VERSION &&
-        info->version.minor == SDL_MINOR_VERSION) {
+    if (info->version.major == SDL_MAJOR_VERSION) {
         info->subsystem = SDL_SYSWM_ANDROID;
         info->info.android.window = data->native_window;
 
@@ -211,8 +216,8 @@ Android_GetWindowWMInfo(_THIS, SDL_Window *window, SDL_SysWMinfo *info)
 
         return SDL_TRUE;
     } else {
-        SDL_SetError("Application not compiled with SDL %d.%d",
-                     SDL_MAJOR_VERSION, SDL_MINOR_VERSION);
+        SDL_SetError("Application not compiled with SDL %d",
+                     SDL_MAJOR_VERSION);
         return SDL_FALSE;
     }
 }

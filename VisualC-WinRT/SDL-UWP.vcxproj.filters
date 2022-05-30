@@ -330,6 +330,9 @@
     <ClInclude Include="..\src\SDL_internal.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\SDL_log_c.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\locale\SDL_syslocale.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -409,6 +412,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\SDL_dataqueue.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\SDL_list.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\haptic\windows\SDL_xinputhaptic_c.h">
@@ -778,6 +784,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\SDL_dataqueue.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\SDL_list.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\haptic\windows\SDL_dinputhaptic.c">
