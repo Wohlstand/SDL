@@ -22,7 +22,6 @@
 
 #ifdef SDL_JOYSTICK_HIDAPI
 
-#include "SDL_hints.h"
 #include "SDL_events.h"
 #include "SDL_joystick.h"
 #include "SDL_gamecontroller.h"
@@ -47,6 +46,26 @@ typedef struct {
 } SDL_DriverLuna_Context;
 
 
+static void
+HIDAPI_DriverLuna_RegisterHints(SDL_HintCallback callback, void *userdata)
+{
+    SDL_AddHintCallback(SDL_HINT_JOYSTICK_HIDAPI_LUNA, callback, userdata);
+}
+
+static void
+HIDAPI_DriverLuna_UnregisterHints(SDL_HintCallback callback, void *userdata)
+{
+    SDL_DelHintCallback(SDL_HINT_JOYSTICK_HIDAPI_LUNA, callback, userdata);
+}
+
+static SDL_bool
+HIDAPI_DriverLuna_IsEnabled(void)
+{
+    return SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_LUNA,
+               SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI,
+                   SDL_HIDAPI_DEFAULT));
+}
+
 static SDL_bool
 HIDAPI_DriverLuna_IsSupportedDevice(const char *name, SDL_GameControllerType type, Uint16 vendor_id, Uint16 product_id, Uint16 version, int interface_number, int interface_class, int interface_subclass, int interface_protocol)
 {
@@ -54,7 +73,7 @@ HIDAPI_DriverLuna_IsSupportedDevice(const char *name, SDL_GameControllerType typ
 }
 
 static const char *
-HIDAPI_DriverLuna_GetDeviceName(Uint16 vendor_id, Uint16 product_id)
+HIDAPI_DriverLuna_GetDeviceName(const char *name, Uint16 vendor_id, Uint16 product_id)
 {
     return "Amazon Luna Controller";
 }
@@ -438,7 +457,9 @@ SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverLuna =
 {
     SDL_HINT_JOYSTICK_HIDAPI_LUNA,
     SDL_TRUE,
-    SDL_TRUE,
+    HIDAPI_DriverLuna_RegisterHints,
+    HIDAPI_DriverLuna_UnregisterHints,
+    HIDAPI_DriverLuna_IsEnabled,
     HIDAPI_DriverLuna_IsSupportedDevice,
     HIDAPI_DriverLuna_GetDeviceName,
     HIDAPI_DriverLuna_InitDevice,

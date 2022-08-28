@@ -526,8 +526,14 @@ X11_CreateWindow(_THIS, SDL_Window * window)
                             visual, AllocNone);
     }
 
+    /* Always create this with the window->windowed.* fields; if we're
+       creating a windowed mode window, that's fine. If we're creating a
+       fullscreen window, the window manager will want to know these values
+       so it can use them if we go _back_ to windowed mode. SDL manages
+       migration to fullscreen after CreateSDLWindow returns, which will
+       put all the SDL_Window fields and system state as expected. */
     w = X11_XCreateWindow(display, RootWindow(display, screen),
-                      window->x, window->y, window->w, window->h,
+                      window->windowed.x, window->windowed.y, window->windowed.w, window->windowed.h,
                       0, depth, InputOutput, visual,
                       (CWOverrideRedirect | CWBackPixmap | CWBorderPixel |
                        CWBackingStore | CWColormap), &xattr);
@@ -1074,6 +1080,10 @@ X11_SetWindowBordered(_THIS, SDL_Window * window, SDL_bool bordered)
     X11_XSync(display, False);
     X11_XCheckIfEvent(display, &event, &isUnmapNotify, (XPointer)&data->xwindow);
     X11_XCheckIfEvent(display, &event, &isMapNotify, (XPointer)&data->xwindow);
+
+    /* Make sure the window manager didn't resize our window for the difference. */
+    X11_XResizeWindow(display, data->xwindow, window->w, window->h);
+    X11_XSync(display, False);
 }
 
 void
@@ -1596,6 +1606,7 @@ X11_SetWindowMouseGrab(_THIS, SDL_Window * window, SDL_bool grabbed)
     if (data == NULL) {
         return;
     }
+    data->mouse_grabbed = SDL_FALSE;
 
     display = data->videodata->display;
 
@@ -1618,6 +1629,7 @@ X11_SetWindowMouseGrab(_THIS, SDL_Window * window, SDL_bool grabbed)
                 result = X11_XGrabPointer(display, data->xwindow, True, mask, GrabModeAsync,
                                  GrabModeAsync, data->xwindow, None, CurrentTime);
                 if (result == GrabSuccess) {
+                    data->mouse_grabbed = SDL_TRUE;
                     break;
                 }
                 SDL_Delay(50);
@@ -1823,7 +1835,7 @@ int SDL_X11_SetWindowTitle(Display* display, Window xwindow, char* title) {
     } else if (conv < 0) {
         return SDL_OutOfMemory();
     } else { /* conv > 0 */
-        SDL_LogDebug(SDL_LOG_CATEGORY_VIDEO, "%d characters were not convertable to the current locale!", conv);
+        SDL_LogDebug(SDL_LOG_CATEGORY_VIDEO, "%d characters were not convertible to the current locale!", conv);
         return 0;
     }
 

@@ -43,6 +43,7 @@
 
 #include "SDL_stdinc.h"
 #include "SDL_error.h"
+#include "SDL_guid.h"
 
 #include "begin_code.h"
 /* Set up for C function definitions, even when using C++ */
@@ -69,9 +70,7 @@ struct _SDL_Joystick;
 typedef struct _SDL_Joystick SDL_Joystick;
 
 /* A structure that encodes the stable unique id for a joystick device */
-typedef struct {
-    Uint8 data[16];
-} SDL_JoystickGUID;
+typedef SDL_GUID SDL_JoystickGUID;
 
 /**
  * This is a unique ID for a joystick for the time it is connected to the system,
@@ -426,6 +425,10 @@ extern DECLSPEC SDL_bool SDLCALL SDL_JoystickIsVirtual(int device_index);
  * the following: SDL_PollEvent, SDL_PumpEvents, SDL_WaitEventTimeout,
  * SDL_WaitEvent.
  *
+ * Note that when sending trigger axes, you should scale the value to the full
+ * range of Sint16. For example, a trigger at rest would have the value of
+ * `SDL_JOYSTICK_AXIS_MIN`.
+ *
  * \param joystick the virtual joystick on which to set state.
  * \param axis the specific axis on the virtual joystick to set.
  * \param value the new value for the specified axis.
@@ -515,7 +518,8 @@ extern DECLSPEC int SDLCALL SDL_JoystickGetPlayerIndex(SDL_Joystick *joystick);
  * Set the player index of an opened joystick.
  *
  * \param joystick the SDL_Joystick obtained from SDL_JoystickOpen()
- * \param player_index the player index to set.
+ * \param player_index Player index to assign to this joystick, or -1 to clear
+ *                     the player index and turn off player LEDs.
  *
  * \since This function is available since SDL 2.0.12.
  */
@@ -575,6 +579,19 @@ extern DECLSPEC Uint16 SDLCALL SDL_JoystickGetProduct(SDL_Joystick *joystick);
 extern DECLSPEC Uint16 SDLCALL SDL_JoystickGetProductVersion(SDL_Joystick *joystick);
 
 /**
+ * Get the firmware version of an opened joystick, if available.
+ *
+ * If the firmware version isn't available this function returns 0.
+ *
+ * \param joystick the SDL_Joystick obtained from SDL_JoystickOpen()
+ * \returns the firmware version of the selected joystick, or 0 if
+ *          unavailable.
+ *
+ * \since This function is available since SDL 2.24.0.
+ */
+extern DECLSPEC Uint16 SDLCALL SDL_JoystickGetFirmwareVersion(SDL_Joystick *joystick);
+
+/**
  * Get the serial number of an opened joystick, if available.
  *
  * Returns the serial number of the joystick, or NULL if it is not available.
@@ -629,6 +646,25 @@ extern DECLSPEC void SDLCALL SDL_JoystickGetGUIDString(SDL_JoystickGUID guid, ch
  * \sa SDL_JoystickGetGUIDString
  */
 extern DECLSPEC SDL_JoystickGUID SDLCALL SDL_JoystickGetGUIDFromString(const char *pchGUID);
+
+/**
+ * Get the device information encoded in a SDL_JoystickGUID structure
+ *
+ * \param guid the SDL_JoystickGUID you wish to get info about
+ * \param vendor A pointer filled in with the device VID, or 0 if not
+ *               available
+ * \param product A pointer filled in with the device PID, or 0 if not
+ *                available
+ * \param version A pointer filled in with the device version, or 0 if not
+ *                available
+ * \param crc A pointer filled in with a CRC used to distinguish different
+ *            products with the same VID/PID, or 0 if not available
+ *
+ * \since This function is available since SDL 2.26.0.
+ *
+ * \sa SDL_JoystickGetDeviceGUID
+ */
+extern DECLSPEC void SDLCALL SDL_GetJoystickGUIDInfo(SDL_JoystickGUID guid, Uint16 *vendor, Uint16 *product, Uint16 *version, Uint16 *crc16);
 
 /**
  * Get the status of a specified joystick.

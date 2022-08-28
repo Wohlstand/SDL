@@ -23,7 +23,7 @@
 #ifdef SDL_JOYSTICK_USBHID
 
 /*
- * Joystick driver for the uhid(4) interface found in OpenBSD,
+ * Joystick driver for the uhid(4) / ujoy(4) interface found in OpenBSD,
  * NetBSD and FreeBSD.
  *
  * Maintainer: <vedge at csoft.org>
@@ -226,7 +226,11 @@ BSD_JoystickInit(void)
     for (i = 0; i < MAX_UHID_JOYS; i++) {
         SDL_Joystick nj;
 
+#if defined(__OpenBSD__) && (OpenBSD >= 202105)
+        SDL_snprintf(s, SDL_arraysize(s), "/dev/ujoy/%d", i);
+#else
         SDL_snprintf(s, SDL_arraysize(s), "/dev/uhid%d", i);
+#endif
 
         joynames[numjoysticks] = SDL_strdup(s);
 
@@ -700,14 +704,11 @@ BSD_JoystickQuit(void)
 }
 
 static SDL_JoystickGUID
-BSD_JoystickGetDeviceGUID( int device_index )
+BSD_JoystickGetDeviceGUID(int device_index)
 {
-    SDL_JoystickGUID guid;
-    /* the GUID is just the first 16 chars of the name for now */
-    const char *name = BSD_JoystickGetDeviceName( device_index );
-    SDL_zero( guid );
-    SDL_memcpy( &guid, name, SDL_min( sizeof(guid), SDL_strlen( name ) ) );
-    return guid;
+    /* the GUID is just the name for now */
+    const char *name = BSD_JoystickGetDeviceName(device_index);
+    return SDL_CreateJoystickGUIDForName(name);
 }
 
 static int

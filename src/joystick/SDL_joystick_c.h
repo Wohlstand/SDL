@@ -28,6 +28,11 @@
 #include "SDL_gamecontroller.h"
 #include "SDL_joystick.h"
 
+/* Set up for C function definitions, even when using C++ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct _SDL_JoystickDriver;
 
 /* Initialization and shutdown functions */
@@ -49,18 +54,23 @@ extern SDL_bool SDL_GetDriverAndJoystickIndex(int device_index, struct _SDL_Joys
 /* Function to return the device index for a joystick ID, or -1 if not found */
 extern int SDL_JoystickGetDeviceIndexFromInstanceID(SDL_JoystickID instance_id);
 
-/* Function to extract information from an SDL joystick GUID */
-extern void SDL_GetJoystickGUIDInfo(SDL_JoystickGUID guid, Uint16 *vendor, Uint16 *product, Uint16 *version);
-
 /* Function to standardize the name for a controller
    This should be freed with SDL_free() when no longer needed
  */
 extern char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_name, const char *product_name);
 
+/* Function to create a GUID for a joystick based on the VID/PID and name */
+extern SDL_JoystickGUID SDL_CreateJoystickGUID(Uint16 bus, Uint16 vendor, Uint16 product, Uint16 version, const char *name, Uint8 driver_signature, Uint8 driver_data);
+
+/* Function to create a GUID for a joystick based on the name, with no VID/PID information */
+extern SDL_JoystickGUID SDL_CreateJoystickGUIDForName(const char *name);
+
+/* Function to set the CRC field of a joystick GUID */
+extern void SDL_SetJoystickGUIDCRC(SDL_JoystickGUID *guid, Uint16 crc);
+
 /* Function to return the type of a controller */
-extern SDL_GameControllerType SDL_GetJoystickGameControllerTypeFromVIDPID(Uint16 vendor, Uint16 product);
+extern SDL_GameControllerType SDL_GetJoystickGameControllerTypeFromVIDPID(Uint16 vendor, Uint16 product, const char *name, SDL_bool forUI);
 extern SDL_GameControllerType SDL_GetJoystickGameControllerTypeFromGUID(SDL_JoystickGUID guid, const char *name);
-extern SDL_GameControllerType SDL_GetJoystickGameControllerType(const char *name, Uint16 vendor, Uint16 product, int interface_number, int interface_class, int interface_subclass, int interface_protocol);
 
 /* Function to return whether a joystick is an Xbox One controller */
 extern SDL_bool SDL_IsJoystickXboxOne(Uint16 vendor_id, Uint16 product_id);
@@ -86,6 +96,8 @@ extern SDL_bool SDL_IsJoystickNintendoSwitchProInputOnly(Uint16 vendor_id, Uint1
 extern SDL_bool SDL_IsJoystickNintendoSwitchJoyCon(Uint16 vendor_id, Uint16 product_id);
 extern SDL_bool SDL_IsJoystickNintendoSwitchJoyConLeft(Uint16 vendor_id, Uint16 product_id);
 extern SDL_bool SDL_IsJoystickNintendoSwitchJoyConRight(Uint16 vendor_id, Uint16 product_id);
+extern SDL_bool SDL_IsJoystickNintendoSwitchJoyConGrip(Uint16 vendor_id, Uint16 product_id);
+extern SDL_bool SDL_IsJoystickNintendoSwitchJoyConPair(Uint16 vendor_id, Uint16 product_id);
 
 /* Function to return whether a joystick is a Steam Controller */
 extern SDL_bool SDL_IsJoystickSteamController(Uint16 vendor_id, Uint16 product_id);
@@ -187,6 +199,11 @@ typedef struct _SDL_GamepadMapping
 /* Function to get autodetected gamepad controller mapping from the driver */
 extern SDL_bool SDL_PrivateJoystickGetAutoGamepadMapping(int device_index,
                                                          SDL_GamepadMapping *out);
+
+/* Ends C function definitions when using C++ */
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SDL_joystick_c_h_ */
 

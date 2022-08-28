@@ -20,7 +20,7 @@
 */
 #include "./SDL_internal.h"
 
-#if defined(__WIN32__)
+#if defined(__WIN32__) || defined(__GDK__)
 #include "core/windows/SDL_windows.h"
 #elif defined(__OS2__)
 #include <stdlib.h> /* _exit() */
@@ -89,7 +89,7 @@ SDL_COMPILE_TIME_ASSERT(SDL_PATCHLEVEL_max, SDL_PATCHLEVEL <= 99);
 extern SDL_NORETURN void SDL_ExitProcess(int exitcode);
 SDL_NORETURN void SDL_ExitProcess(int exitcode)
 {
-#ifdef __WIN32__
+#if defined(__WIN32__) || defined(__GDK__)
     /* "if you do not know the state of all threads in your process, it is
        better to call TerminateProcess than ExitProcess"
        https://msdn.microsoft.com/en-us/library/windows/desktop/ms682658(v=vs.85).aspx */
@@ -579,10 +579,18 @@ SDL_GetPlatform(void)
     return "Windows";
 #elif __WINRT__
     return "WinRT";
+#elif __WINGDK__
+    return "WinGDK";
+#elif __XBOXONE__
+    return "Xbox One";
+#elif __XBOXSERIES__
+    return "Xbox Series";
 #elif __TVOS__
     return "tvOS";
 #elif __IPHONEOS__
     return "iOS";
+#elif __PS2__
+    return "PlayStation 2";
 #elif __PSP__
     return "PlayStation Portable";
 #elif __VITA__
@@ -628,6 +636,6 @@ _DllMainCRTStartup(HANDLE hModule,
 }
 #endif /* Building DLL */
 
-#endif /* __WIN32__ */
+#endif /* defined(__WIN32__) || defined(__GDK__) */
 
 /* vi: set sts=4 ts=4 sw=4 expandtab: */

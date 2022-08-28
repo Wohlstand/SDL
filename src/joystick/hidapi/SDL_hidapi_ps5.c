@@ -22,7 +22,6 @@
 
 #ifdef SDL_JOYSTICK_HIDAPI
 
-#include "SDL_hints.h"
 #include "SDL_events.h"
 #include "SDL_timer.h"
 #include "SDL_joystick.h"
@@ -59,6 +58,7 @@ typedef enum
 {
     k_EPS5FeatureReportIdCalibration = 0x05,
     k_EPS5FeatureReportIdSerialNumber = 0x09,
+    k_EPS5FeatureReportIdFirmwareInfo = 0x20,
 } EPS5FeatureReportId;
 
 typedef struct
@@ -119,7 +119,7 @@ typedef struct
     Uint8 rgucRightTriggerEffect[11];   /* 10 */
     Uint8 rgucLeftTriggerEffect[11];    /* 21 */
     Uint8 rgucUnknown1[6];              /* 32 */
-    Uint8 ucLedFlags;                   /* 38 */
+    Uint8 ucEnableBits3;                /* 38 */
     Uint8 rgucUnknown2[2];              /* 39 */
     Uint8 ucLedAnim;                    /* 41 */
     Uint8 ucLedBrightness;              /* 42 */
@@ -157,6 +157,7 @@ typedef struct {
     SDL_bool report_sensors;
     SDL_bool hardware_calibration;
     IMUCalibrationData calibration[6];
+    Uint16 firmware_version;
     Uint32 last_packet;
     int player_index;
     SDL_bool player_lights;
@@ -177,6 +178,26 @@ typedef struct {
 
 static int HIDAPI_DriverPS5_SendJoystickEffect(SDL_HIDAPI_Device *device, SDL_Joystick *joystick, const void *effect, int size);
 
+static void
+HIDAPI_DriverPS5_RegisterHints(SDL_HintCallback callback, void *userdata)
+{
+    SDL_AddHintCallback(SDL_HINT_JOYSTICK_HIDAPI_PS5, callback, userdata);
+}
+
+static void
+HIDAPI_DriverPS5_UnregisterHints(SDL_HintCallback callback, void *userdata)
+{
+    SDL_DelHintCallback(SDL_HINT_JOYSTICK_HIDAPI_PS5, callback, userdata);
+}
+
+static SDL_bool
+HIDAPI_DriverPS5_IsEnabled(void)
+{
+    return SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI_PS5,
+               SDL_GetHintBoolean(SDL_HINT_JOYSTICK_HIDAPI,
+                   SDL_HIDAPI_DEFAULT));
+}
+
 static SDL_bool
 HIDAPI_DriverPS5_IsSupportedDevice(const char *name, SDL_GameControllerType type, Uint16 vendor_id, Uint16 product_id, Uint16 version, int interface_number, int interface_class, int interface_subclass, int interface_protocol)
 {
@@ -184,7 +205,7 @@ HIDAPI_DriverPS5_IsSupportedDevice(const char *name, SDL_GameControllerType type
 }
 
 static const char *
-HIDAPI_DriverPS5_GetDeviceName(Uint16 vendor_id, Uint16 product_id)
+HIDAPI_DriverPS5_GetDeviceName(const char *name, Uint16 vendor_id, Uint16 product_id)
 {
     if (vendor_id == USB_VENDOR_SONY) {
         return "PS5 Controller";
@@ -236,8 +257,9 @@ SetLightsForPlayerIndex(DS5EffectsState_t *effects, int player_index)
         0x1B
     };
 
-    if (player_index >= 0 && player_index < SDL_arraysize(lights)) {
+    if (player_index >= 0) {
         /* Bitmask, 0x1F enables all lights, 0x20 changes instantly instead of fade */
+        player_index %= SDL_arraysize(lights);
         effects->ucPadLights = lights[player_index] | 0x20;
     } else {
         effects->ucPadLights = 0x00;
@@ -395,12 +417,19 @@ HIDAPI_DriverPS5_UpdateEffects(SDL_HIDAPI_Device *device, int effect_mask)
     }
 
     if (ctx->rumble_left || ctx->rumble_right) {
-        effects.ucEnableBits1 |= 0x01; /* Enable rumble emulation */
-        effects.ucEnableBits1 |= 0x02; /* Disable audio haptics */
+        if (ctx->firmware_version < 0x0224) {
+            effects.ucEnableBits1 |= 0x01; /* Enable rumble emulation */
 
-        /* Shift to reduce effective rumble strength to match Xbox controllers */
-        effects.ucRumbleLeft = ctx->rumble_left >> 1;
-        effects.ucRumbleRight = ctx->rumble_right >> 1;
+            /* Shift to reduce effective rumble strength to match Xbox controllers */
+            effects.ucRumbleLeft = ctx->rumble_left >> 1;
+            effects.ucRumbleRight = ctx->rumble_right >> 1;
+        } else {
+            effects.ucEnableBits3 |= 0x04; /* Enable improved rumble emulation on 2.24 firmware and newer */
+
+            effects.ucRumbleLeft = ctx->rumble_left;
+            effects.ucRumbleRight = ctx->rumble_right;
+        }
+        effects.ucEnableBits1 |= 0x02; /* Disable audio haptics */
     } else {
         /* Leaving emulated rumble bits off will restore audio haptics */
     }
@@ -600,6 +629,14 @@ HIDAPI_DriverPS5_OpenJoystick(SDL_HIDAPI_Device *device, SDL_Joystick *joystick)
             SDL_snprintf(serial, sizeof(serial), "%.2x-%.2x-%.2x-%.2x-%.2x-%.2x",
                 data[6], data[5], data[4], data[3], data[2], data[1]);
             joystick->serial = SDL_strdup(serial);
+        }
+
+        /* Read the firmware version
+           This will also enable enhanced reports over Bluetooth
+        */
+        if (ReadFeatureReport(device->dev, k_EPS5FeatureReportIdFirmwareInfo, data, USB_PACKET_LENGTH) >= 46) {
+            ctx->firmware_version = (Uint16)data[44] | ((Uint16)data[45] << 8);
+            joystick->firmware_version = ctx->firmware_version;
         }
     }
 
@@ -1103,7 +1140,9 @@ SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverPS5 =
 {
     SDL_HINT_JOYSTICK_HIDAPI_PS5,
     SDL_TRUE,
-    SDL_TRUE,
+    HIDAPI_DriverPS5_RegisterHints,
+    HIDAPI_DriverPS5_UnregisterHints,
+    HIDAPI_DriverPS5_IsEnabled,
     HIDAPI_DriverPS5_IsSupportedDevice,
     HIDAPI_DriverPS5_GetDeviceName,
     HIDAPI_DriverPS5_InitDevice,

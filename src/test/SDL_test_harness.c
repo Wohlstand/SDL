@@ -349,7 +349,7 @@ static void SDLTest_LogTestSuiteSummary(SDLTest_TestSuiteReference *testSuites)
 /* Gets a timer value in seconds */
 static float GetClock()
 {
-    float currentClock = clock() / (float) CLOCKS_PER_SEC;
+    float currentClock = SDL_GetPerformanceCounter() / (float) SDL_GetPerformanceFrequency();
     return currentClock;
 }
 
@@ -443,6 +443,11 @@ int SDLTest_RunSuites(SDLTest_TestSuiteReference *testSuites[], const char *user
         }
     }
 
+    if (totalNumberOfTests == 0) {
+        SDLTest_LogError("No tests to run?");
+        return -1;
+    }
+
     /* Pre-allocate an array for tracking failed tests (potentially all test cases) */
     failedTests = (const SDLTest_TestCaseReference **)SDL_malloc(totalNumberOfTests * sizeof(SDLTest_TestCaseReference *));
     if (failedTests == NULL) {    
@@ -468,8 +473,7 @@ int SDLTest_RunSuites(SDLTest_TestSuiteReference *testSuites[], const char *user
 
             /* Within each suite, loop over all test cases to check if we have a filter match */
             testCounter = 0;
-            while (testSuite->testCases[testCounter] && testFilter == 0)
-            {
+            while (testSuite->testCases[testCounter] && testFilter == 0) {
                 testCase = testSuite->testCases[testCounter];
                 testCounter++;
                 if (testCase->name != NULL && SDL_strcmp(filter, testCase->name) == 0) {
@@ -486,6 +490,18 @@ int SDLTest_RunSuites(SDLTest_TestSuiteReference *testSuites[], const char *user
 
         if (suiteFilter == 0 && testFilter == 0) {
             SDLTest_LogError("Filter '%s' did not match any test suite/case.", filter);
+            for (suiteCounter = 0; testSuites[suiteCounter]; ++suiteCounter) {
+                testSuite = testSuites[suiteCounter];
+                if (testSuite->name != NULL) {
+                    SDLTest_Log("Test suite: %s", testSuite->name);
+                }
+
+                /* Within each suite, loop over all test cases to check if we have a filter match */
+                for (testCounter = 0; testSuite->testCases[testCounter]; ++testCounter) {
+                    testCase = testSuite->testCases[testCounter];
+                    SDLTest_Log("      test: %s", testCase->name);
+                }
+            }
             SDLTest_Log("Exit code: 2");
             SDL_free((void *) failedTests);
             return 2;

@@ -1,20 +1,21 @@
-cmake_minimum_required(VERSION 3.0.0)
-project(SDL2 C)
-include(CTest)
+cmake_minimum_required(VERSION 3.0)
+project(SDL2_test)
+
+if(NOT TARGET SDL2::SDL2-static)
+    find_package(SDL2 2.0.23 REQUIRED COMPONENTS SDL2-static SDL2test)
+endif()
+
+enable_testing()
 
 if(SDL_INSTALL_TESTS)
     include(GNUInstallDirs)
 endif()
 
-# Global settings for all of the test targets
-# FIXME: is this wrong?
-remove_definitions(-DUSING_GENERATED_CONFIG_H)
-
 if(PSP)
     link_libraries(
-        SDL2main
-        SDL2_test
-        SDL2-static
+        SDL2::SDL2main
+        SDL2::SDL2test
+        SDL2::SDL2-static
         GL
         pspvram
         pspvfpu
@@ -26,14 +27,29 @@ if(PSP)
         psphprm
         psppower
     )
+elseif(PS2)
+link_libraries(
+        SDL2main
+        SDL2_test
+        SDL2-static
+        patches
+        gskit
+        dmakit
+        ps2_drivers
+)
 else()
-    link_libraries(SDL2_test SDL2-static)
+    link_libraries(SDL2::SDL2test SDL2::SDL2-static)
 endif()
 
 if(WINDOWS)
     # mingw32 must come before SDL2main to link successfully
     if(MINGW OR CYGWIN)
         link_libraries(mingw32)
+    endif()
+
+    # CET support was added in VS 16.7
+    if(MSVC_VERSION GREATER 1926 AND NOT CMAKE_GENERATOR_PLATFORM MATCHES ARM)
+        link_libraries(-CETCOMPAT)
     endif()
 
     # FIXME: Parent directory CMakeLists.txt only sets these for mingw/cygwin,
@@ -44,6 +60,8 @@ endif()
 
 # CMake incorrectly detects opengl32.lib being present on MSVC ARM64
 if(NOT MSVC OR NOT CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+    # Prefer GLVND, if present
+    set(OpenGL_GL_PREFERENCE GLVND)
     find_package(OpenGL)
 endif()
 
@@ -105,7 +123,7 @@ if(APPLE)
                               testutils.c)
 elseif(WINDOWS)
     add_executable(testnative testnative.c testnativew32.c testutils.c)
-elseif(SDL_X11)
+elseif(HAVE_X11)
     add_executable(testnative testnative.c testnativex11.c testutils.c)
     target_link_libraries(testnative X11)
 endif()
@@ -248,15 +266,13 @@ if(SDL_DUMMYVIDEO)
 endif()
 
 if(OPENGL_FOUND)
-add_dependencies(testshader OpenGL::GL)
-add_dependencies(testgl2 OpenGL::GL)
-target_link_libraries(testshader OpenGL::GL)
-target_link_libraries(testgl2 OpenGL::GL)
+    target_link_libraries(testshader OpenGL::GL)
+    target_link_libraries(testgl2 OpenGL::GL)
 endif()
 
 file(GLOB RESOURCE_FILES *.bmp *.wav *.hex moose.dat utf8.txt)
 file(COPY ${RESOURCE_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-if(PSP)
+if(PSP OR PS2)
     set(NEEDS_RESOURCES
         testscale
         testrendercopyex
@@ -304,7 +320,7 @@ else()
         teststreaming
         testviewport
     )
-    if(WINDOWS OR APPLE OR SDL_X11)
+    if(WINDOWS OR APPLE OR HAVE_X11)
         list(APPEND NEEDS_RESOURCES testnative)
     endif()
 endif()
@@ -313,35 +329,35 @@ if(PSP)
     # Build EBOOT files if building for PSP
     set(BUILD_EBOOT
         ${NEEDS_RESOURCES}
-        testbounds
-        testgl2
-        testsem
-        testdisplayinfo
-        teststreaming
-        testgeometry
-        testfile
-        testdraw2
-        testviewport
-        testhittesting
-        testoverlay2
-        testver
-        testdrawchessboard
-        testsurround
-        testintersections
-        testmessage
-        testaudiocapture
-        testerror
         testatomic
-        testjoystick
-        testiconv
-        testfilesystem
-        testplatform
-        testthread
-        testqsort
+        testaudiocapture
         testaudioinfo
+        testbounds
+        testdisplayinfo
+        testdraw2
+        testdrawchessboard
+        testerror
+        testfile
+        testfilesystem
+        testgeometry
+        testgl2
+        testhittesting
+        testiconv
+        testintersections
+        testjoystick
         testlock
-        testtimer
+        testmessage
+        testoverlay2
+        testplatform
         testpower
+        testqsort
+        testsem
+        teststreaming
+        testsurround
+        testthread
+        testtimer
+        testver
+        testviewport
         testwm2
         torturethread
     )
@@ -402,7 +418,7 @@ endif()
 
 foreach(APP IN LISTS NEEDS_RESOURCES)
     foreach(RESOURCE_FILE ${RESOURCE_FILES})
-        if(PSP)
+        if(PSP OR PS2)
             add_custom_command(TARGET ${APP} POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy_if_different ${RESOURCE_FILE} $<TARGET_FILE_DIR:${APP}>/sdl-${APP})
         else()
             add_custom_command(TARGET ${APP} POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy_if_different ${RESOURCE_FILE} $<TARGET_FILE_DIR:${APP}>)

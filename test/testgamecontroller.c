@@ -69,6 +69,17 @@ static const struct { int x; int y; double angle; } axis_positions[] = {
 };
 SDL_COMPILE_TIME_ASSERT(axis_positions, SDL_arraysize(axis_positions) == SDL_CONTROLLER_AXIS_MAX);
 
+/* This is indexed by SDL_JoystickPowerLevel + 1. */
+static const char* power_level_strings[] = {
+    "unknown", /* SDL_JOYSTICK_POWER_UNKNOWN */
+    "empty",   /* SDL_JOYSTICK_POWER_EMPTY */
+    "low",     /* SDL_JOYSTICK_POWER_LOW */
+    "medium",  /* SDL_JOYSTICK_POWER_MEDIUM */
+    "full",    /* SDL_JOYSTICK_POWER_FULL */
+    "wired",   /* SDL_JOYSTICK_POWER_WIRED */
+};
+SDL_COMPILE_TIME_ASSERT(power_level_strings, SDL_arraysize(power_level_strings) == SDL_JOYSTICK_POWER_MAX + 1);
+
 static SDL_Window *window = NULL;
 static SDL_Renderer *screen = NULL;
 static SDL_bool retval = SDL_FALSE;
@@ -133,6 +144,7 @@ static void AddController(int device_index, SDL_bool verbose)
     SDL_JoystickID controller_id = SDL_JoystickGetDeviceInstanceID(device_index);
     SDL_GameController *controller;
     SDL_GameController **controllers;
+    Uint16 firmware_version;
 
     controller_id = SDL_JoystickGetDeviceInstanceID(device_index);
     if (controller_id < 0) {
@@ -166,6 +178,13 @@ static void AddController(int device_index, SDL_bool verbose)
         const char *name = SDL_GameControllerName(gamecontroller);
         const char *path = SDL_GameControllerPath(gamecontroller);
         SDL_Log("Opened game controller %s%s%s\n", name, path ? ", " : "", path ? path : "");
+    }
+
+    firmware_version = SDL_GameControllerGetFirmwareVersion(gamecontroller);
+    if (firmware_version) {
+        if (verbose) {
+            SDL_Log("Firmware version: 0x%x (%d)\n", firmware_version, firmware_version);
+        }
     }
 
     if (SDL_GameControllerHasSensor(gamecontroller, SDL_SENSOR_ACCEL)) {
@@ -579,6 +598,10 @@ loop(void *arg)
             }
             break;
 
+        case SDL_JOYBATTERYUPDATED:
+            SDL_Log("Controller %d battery state changed to %s\n", event.jbattery.which, power_level_strings[event.jbattery.level + 1]);
+            break;
+
         case SDL_MOUSEBUTTONDOWN:
             if (virtual_joystick) {
                 VirtualControllerMouseDown(event.button.x, event.button.y);
@@ -741,7 +764,6 @@ main(int argc, char *argv[])
     char guid[64];
 
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ROG_CHAKRAM, "1");
@@ -791,6 +813,11 @@ main(int argc, char *argv[])
                 break;
             case SDL_CONTROLLER_TYPE_GOOGLE_STADIA:
                 description = "Google Stadia Controller";
+                break;
+            case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+            case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+            case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+                description = "Nintendo Switch Joy-Con";
                 break;
             case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO:
                 description = "Nintendo Switch Pro Controller";

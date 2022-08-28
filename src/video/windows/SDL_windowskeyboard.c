@@ -20,7 +20,7 @@
 */
 #include "../../SDL_internal.h"
 
-#if SDL_VIDEO_DRIVER_WINDOWS
+#if SDL_VIDEO_DRIVER_WINDOWS && !defined(__XBOXONE__) && !defined(__XBOXSERIES__)
 
 #include "SDL_windowsvideo.h"
 #include "SDL_hints.h"
@@ -54,6 +54,7 @@ static SDL_bool IME_IsTextInputShown(SDL_VideoData* videodata);
 void
 WIN_InitKeyboard(_THIS)
 {
+#ifndef SDL_DISABLE_WINDOWS_IME
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
 
     data->ime_com_initialized = SDL_FALSE;
@@ -101,8 +102,9 @@ WIN_InitKeyboard(_THIS)
     data->ime_convmodesinkcookie = TF_INVALID_COOKIE;
     data->ime_uielemsink = 0;
     data->ime_ippasink = 0;
+#endif /* !SDL_DISABLE_WINDOWS_IME */
 
-    WIN_UpdateKeymap();
+    WIN_UpdateKeymap(SDL_FALSE);
 
     SDL_SetScancodeName(SDL_SCANCODE_APPLICATION, "Menu");
     SDL_SetScancodeName(SDL_SCANCODE_LGUI, "Left Windows");
@@ -115,7 +117,7 @@ WIN_InitKeyboard(_THIS)
 }
 
 void
-WIN_UpdateKeymap()
+WIN_UpdateKeymap(SDL_bool send_event)
 {
     int i;
     SDL_Scancode scancode;
@@ -152,15 +154,22 @@ WIN_UpdateKeymap()
         }
     }
 
-    SDL_SetKeymap(0, keymap, SDL_NUM_SCANCODES);
+    SDL_SetKeymap(0, keymap, SDL_NUM_SCANCODES, send_event);
 }
 
 void
 WIN_QuitKeyboard(_THIS)
 {
+    SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
+
 #ifndef SDL_DISABLE_WINDOWS_IME
-    IME_Quit((SDL_VideoData *)_this->driverdata);
-#endif
+    IME_Quit(data);
+
+    if (data->ime_composition) {
+        SDL_free(data->ime_composition);
+        data->ime_composition = NULL;
+    }
+#endif /* !SDL_DISABLE_WINDOWS_IME */
 }
 
 void
@@ -235,7 +244,7 @@ WIN_StopTextInput(_THIS)
 }
 
 void
-WIN_SetTextInputRect(_THIS, SDL_Rect *rect)
+WIN_SetTextInputRect(_THIS, const SDL_Rect *rect)
 {
     SDL_VideoData *videodata = (SDL_VideoData *)_this->driverdata;
     HIMC himc = 0;
@@ -245,6 +254,7 @@ WIN_SetTextInputRect(_THIS, SDL_Rect *rect)
         return;
     }
 
+#ifndef SDL_DISABLE_WINDOWS_IME
     videodata->ime_rect = *rect;
 
     himc = ImmGetContext(videodata->ime_hwnd_current);
@@ -274,6 +284,7 @@ WIN_SetTextInputRect(_THIS, SDL_Rect *rect)
 
         ImmReleaseContext(videodata->ime_hwnd_current, himc);
     }
+#endif /* !SDL_DISABLE_WINDOWS_IME */
 }
 
 
@@ -623,7 +634,7 @@ IME_GetId(SDL_VideoData *videodata, UINT uIndex)
         dwRet[0] = dwRet[1] = 0;
         return dwRet[0];
     }
-    if (ImmGetIMEFileNameA(hkl, szTemp, sizeof(szTemp) - 1) <= 0) {
+    if (!ImmGetIMEFileNameA(hkl, szTemp, sizeof(szTemp) - 1)) {
         dwRet[0] = dwRet[1] = 0;
         return dwRet[0];
     }
@@ -689,7 +700,7 @@ IME_SetupAPI(SDL_VideoData *videodata)
         return;
 
     hkl = videodata->ime_hkl;
-    if (ImmGetIMEFileNameA(hkl, ime_file, sizeof(ime_file) - 1) <= 0)
+    if (!ImmGetIMEFileNameA(hkl, ime_file, sizeof(ime_file) - 1))
         return;
 
     hime = SDL_LoadObject(ime_file);
