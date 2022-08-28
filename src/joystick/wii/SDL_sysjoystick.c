@@ -85,7 +85,7 @@ typedef struct joystick_wpaddata_t
 }joystick_wpaddata;
 
 /* The private structure used to keep track of a joystick */
-typedef struct joystick_hwdata_t
+struct joystick_hwdata
 {
     int index;
     int type;
@@ -232,7 +232,7 @@ static void _HandleWiiJoystickUpdate(SDL_Joystick* joystick, int device_index)
     u32 exp_type;
     struct expansion_t exp;
     int i, axis;
-    joystick_hwdata *prev_state;
+    struct joystick_hwdata *prev_state;
     WPADData *data;
 
     buttons = WPAD_ButtonsHeld(device_index);
@@ -243,7 +243,7 @@ static void _HandleWiiJoystickUpdate(SDL_Joystick* joystick, int device_index)
      data = WPAD_Data(device_index);
      WPAD_Expansion(device_index, &exp);
 
-    prev_state = (joystick_hwdata *)joystick->hwdata;
+    prev_state = (struct joystick_hwdata *)joystick->hwdata;
     prev_buttons = prev_state->wiimote.prev_buttons;
     changed = buttons ^ prev_buttons;
 
@@ -381,10 +381,10 @@ static void _HandleGCJoystickUpdate(SDL_Joystick* joystick, int device_index)
     u16 buttons, prev_buttons, changed;
     int i;
     int axis;
-    joystick_hwdata *prev_state;
+    struct joystick_hwdata *prev_state;
 
     buttons = PAD_ButtonsHeld(device_index - 4);
-    prev_state = (joystick_hwdata *)joystick->hwdata;
+    prev_state = (struct joystick_hwdata *)joystick->hwdata;
     prev_buttons = prev_state->gamecube.prev_buttons;
     changed = buttons ^ prev_buttons;
 
@@ -510,14 +510,23 @@ static const char *Wii_JoystickGetDeviceName(int device_index)
     }
 }
 
+static const char *Wii_JoystickGetDevicePath(int device_index)
+{
+    (void)device_index;
+    return NULL;
+}
+
 static int Wii_JoystickGetDevicePlayerIndex(int device_index)
 {
+    (void)device_index;
     return -1;
 }
 
 static void
 Wii_JoystickSetDevicePlayerIndex(int device_index, int player_index)
 {
+    (void)device_index;
+    (void)player_index;
 }
 
 static SDL_JoystickGUID Wii_JoystickGetDeviceGUID(int device_index)
@@ -547,20 +556,20 @@ static SDL_JoystickID Wii_JoystickGetDeviceInstanceID(int device_index)
 static int Wii_JoystickOpen(SDL_Joystick *joystick, int device_index)
 {
     /* allocate memory for system specific hardware data */
-    joystick->hwdata = SDL_malloc(sizeof(joystick_hwdata));
+    joystick->hwdata = (struct joystick_hwdata*)SDL_malloc(sizeof(struct joystick_hwdata));
     if (joystick->hwdata == NULL)
     {
         SDL_OutOfMemory();
         return(-1);
     }
 
-    SDL_memset(joystick->hwdata, 0, sizeof(joystick_hwdata));
+    SDL_memset(joystick->hwdata, 0, sizeof(struct joystick_hwdata));
     if((device_index < 4) && (__jswpad_enabled))
     {
         if(device_index < __numwiijoysticks)
         {
-            ((joystick_hwdata*)(joystick->hwdata))->index = device_index;
-            ((joystick_hwdata*)(joystick->hwdata))->type = 0;
+            ((struct joystick_hwdata*)(joystick->hwdata))->index = device_index;
+            ((struct joystick_hwdata*)(joystick->hwdata))->type = 0;
             joystick->nbuttons = MAX_WII_BUTTONS;
             joystick->naxes = MAX_WII_AXES;
             joystick->nhats = MAX_WII_HATS;
@@ -570,8 +579,8 @@ static int Wii_JoystickOpen(SDL_Joystick *joystick, int device_index)
     {
         if(device_index < (__numgcjoysticks + 4))
         {
-            ((joystick_hwdata*)(joystick->hwdata))->index = device_index - 4;
-            ((joystick_hwdata*)(joystick->hwdata))->type = 1;
+            ((struct joystick_hwdata*)(joystick->hwdata))->index = device_index - 4;
+            ((struct joystick_hwdata*)(joystick->hwdata))->type = 1;
             joystick->nbuttons = MAX_GC_BUTTONS;
             joystick->naxes = MAX_GC_AXES;
             joystick->nhats = MAX_GC_HATS;
@@ -584,7 +593,7 @@ static int Wii_JoystickOpen(SDL_Joystick *joystick, int device_index)
 static int
 Wii_JoystickRumble(SDL_Joystick *joystick, Uint16 low_frequency_rumble, Uint16 high_frequency_rumble)
 {
-    joystick_hwdata *j = ((joystick_hwdata*)(joystick->hwdata));
+    struct joystick_hwdata *j = ((struct joystick_hwdata*)(joystick->hwdata));
     int index;
 
     if (!j) {
@@ -660,14 +669,14 @@ static int Wii_JoystickSetSensorsEnabled(SDL_Joystick *joystick, SDL_bool enable
  */
 static void Wii_JoystickUpdate(SDL_Joystick *joystick)
 {
-    joystick_hwdata* j;
+    struct joystick_hwdata* j;
     if(!joystick || !joystick->hwdata)
         return;
 
     WPAD_ScanPads();
     PAD_ScanPads();
 
-    j = ((joystick_hwdata*)(joystick->hwdata));
+    j = ((struct joystick_hwdata*)(joystick->hwdata));
 
     SDL_assert_always(j);
 
@@ -703,77 +712,13 @@ static void Wii_JoystickQuit(void)
     WPAD_Shutdown();
 }
 
-static SDL_bool
-Wii_JoystickGetGamepadMapping(int device_index, SDL_GamepadMapping *out)
-{
-#if 0
-    u32 exp_type;
-    SDL_memset(out, 0, sizeof(SDL_GamepadMapping));
-
-    if((device_index < 4) && (__jswpad_enabled))
-    {
-        if(device_index < __numwiijoysticks)
-        {
-            if (WPAD_Probe(device_index, &exp_type) != 0) {
-                exp_type = WPAD_EXP_NONE;
-            }
-
-            if (exp_type == WPAD_EXP_CLASSIC) {
-                out->a.kind = EMappingKind_Button;
-                out->a.target = 9;
-                out->b.kind = EMappingKind_Button;
-                out->b.target = 10;
-                out->x.kind = EMappingKind_Button;
-                out->x.target = 11;
-                out->y.kind = EMappingKind_Button;
-                out->y.target = 12;
-
-                out->leftshoulder.kind = EMappingKind_Button;
-                out->leftshoulder.target = 13;
-                out->rightshoulder.kind = EMappingKind_Button;
-                out->rightshoulder.target = 14;
-            } else {
-                out->a.kind = EMappingKind_Button;
-                out->a.target = 3; /* 2 */
-                out->b.kind = EMappingKind_Button;
-                out->b.target = 1; /* 1 */
-                out->x.kind = EMappingKind_Button;
-                out->x.target = 0; /* A */
-                out->y.kind = EMappingKind_Button;
-                out->y.target = 2; /* B */
-            }
-
-            out->dpup.kind = EMappingKind_Hat;
-            out->dpup.target = 0;
-            out->dpdown.kind = EMappingKind_Hat;
-            out->dpdown.target = 0;
-            out->dpleft.kind = EMappingKind_Hat;
-            out->dpleft.target = 0;
-            out->dpright.kind = EMappingKind_Hat;
-            out->dpright.target = 0;
-        }
-    }
-    else if((device_index < 8) && (__jspad_enabled))
-    {
-        if(device_index < (__numgcjoysticks + 4))
-        {
-
-        }
-    }
-#else
-    (void)device_index;
-    (void)out;
-#endif
-
-    return SDL_FALSE;
-}
-
 SDL_JoystickDriver SDL_WII_JoystickDriver =
 {
     Wii_JoystickInit,
     Wii_NumJoysticks,
     Wii_JoystickDetect,
     Wii_JoystickGetDeviceName,
+    Wii_JoystickGetDevicePath,
     Wii_JoystickGetDevicePlayerIndex,
     Wii_JoystickSetDevicePlayerIndex,
     Wii_JoystickGetDeviceGUID,
