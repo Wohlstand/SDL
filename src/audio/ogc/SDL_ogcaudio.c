@@ -94,12 +94,18 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
                     this->spec.channels = 2;
                 }
             } else {
-                SDL_free(this->hidden);
+                if (this->hidden) {
+                    SDL_free(this->hidden);
+                    this->hidden = NULL;
+                }
                 return SDL_SetError("Unsupported audio format");
             }
             break;
         default:
-            SDL_free(this->hidden);
+            if (this->hidden) {
+                SDL_free(this->hidden);
+                this->hidden = NULL;
+            }
             return SDL_SetError("Unsupported audio format");
     }
 
@@ -122,6 +128,7 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     this->hidden->rawbuf = (Uint8 *) memalign(64, mixlen);
     if (this->hidden->rawbuf == NULL) {
         SDL_free(this->hidden);
+        this->hidden = NULL;
         return SDL_SetError("Couldn't allocate mixing buffer");
     }
 
@@ -217,8 +224,10 @@ static void OGCAUD_CloseDevice(_THIS)
     }
 
     s_callback_data[this->hidden->channel] = 0;
-    SDL_free(this->hidden);
-    this->hidden = NULL;
+    if (this->hidden) {
+        SDL_free(this->hidden);
+        this->hidden = NULL;
+    }
 }
 
 static void OGCAUD_ThreadInit(_THIS)
