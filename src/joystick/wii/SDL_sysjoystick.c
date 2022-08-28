@@ -712,6 +712,71 @@ static void Wii_JoystickQuit(void)
     WPAD_Shutdown();
 }
 
+static SDL_bool
+Wii_JoystickGetGamepadMapping(int device_index, SDL_GamepadMapping *out)
+{
+#if 0
+    u32 exp_type;
+    SDL_memset(out, 0, sizeof(SDL_GamepadMapping));
+
+    if((device_index < 4) && (__jswpad_enabled))
+    {
+        if(device_index < __numwiijoysticks)
+        {
+            if (WPAD_Probe(device_index, &exp_type) != 0) {
+                exp_type = WPAD_EXP_NONE;
+            }
+
+            if (exp_type == WPAD_EXP_CLASSIC) {
+                out->a.kind = EMappingKind_Button;
+                out->a.target = 9;
+                out->b.kind = EMappingKind_Button;
+                out->b.target = 10;
+                out->x.kind = EMappingKind_Button;
+                out->x.target = 11;
+                out->y.kind = EMappingKind_Button;
+                out->y.target = 12;
+
+                out->leftshoulder.kind = EMappingKind_Button;
+                out->leftshoulder.target = 13;
+                out->rightshoulder.kind = EMappingKind_Button;
+                out->rightshoulder.target = 14;
+            } else {
+                out->a.kind = EMappingKind_Button;
+                out->a.target = 3; /* 2 */
+                out->b.kind = EMappingKind_Button;
+                out->b.target = 1; /* 1 */
+                out->x.kind = EMappingKind_Button;
+                out->x.target = 0; /* A */
+                out->y.kind = EMappingKind_Button;
+                out->y.target = 2; /* B */
+            }
+
+            out->dpup.kind = EMappingKind_Hat;
+            out->dpup.target = 0;
+            out->dpdown.kind = EMappingKind_Hat;
+            out->dpdown.target = 0;
+            out->dpleft.kind = EMappingKind_Hat;
+            out->dpleft.target = 0;
+            out->dpright.kind = EMappingKind_Hat;
+            out->dpright.target = 0;
+        }
+    }
+    else if((device_index < 8) && (__jspad_enabled))
+    {
+        if(device_index < (__numgcjoysticks + 4))
+        {
+
+        }
+    }
+#else
+    (void)device_index;
+    (void)out;
+#endif
+
+    return SDL_FALSE;
+}
+
 SDL_JoystickDriver SDL_WII_JoystickDriver =
 {
     Wii_JoystickInit,
@@ -733,7 +798,7 @@ SDL_JoystickDriver SDL_WII_JoystickDriver =
     Wii_JoystickUpdate,
     Wii_JoystickClose,
     Wii_JoystickQuit,
-    NULL
+    Wii_JoystickGetGamepadMapping
 };
 
 #endif /* SDL_JOYSTICK_WII */
