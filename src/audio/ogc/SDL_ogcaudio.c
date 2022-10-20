@@ -234,6 +234,9 @@ static void OGCAUD_ThreadInit(_THIS)
 {
     /* Increase the priority of this audio thread by 1 to put it
        ahead of other SDL threads. */
+
+    LWP_SetThreadPriority(LWP_THREAD_NULL, LWP_PRIO_HIGHEST - 5);
+    
     (void)this;
 }
 
