@@ -3217,9 +3217,9 @@ if(ANDROID)
   target_include_directories(sdl-build-options INTERFACE "${ANDROID_NDK}/sources/android/cpufeatures")
 endif()
 
-if(APPLE)
-  target_compile_options(sdl-build-options INTERFACE "-fobjc-arc")
-endif()
+#if(APPLE)
+#  target_compile_options(sdl-build-options INTERFACE "-fobjc-arc")
+#endif()
 
 if(PS2)
   target_compile_options(sdl-build-options INTERFACE "-Wno-error=declaration-after-statement")

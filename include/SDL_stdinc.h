@@ -528,7 +528,7 @@ extern DECLSPEC void *SDLCALL SDL_memset(SDL_OUT_BYTECAP(len) void *dst, int c, 
 /* Note that memset() is a byte assignment and this is a 32-bit assignment, so they're not directly equivalent. */
 SDL_FORCE_INLINE void SDL_memset4(void *dst, Uint32 val, size_t dwords)
 {
-#ifdef __APPLE__
+#if defined(__APPLE__) && MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
     memset_pattern4(dst, &val, dwords * 4);
 #elif defined(__GNUC__) && defined(__i386__)
     int u0, u1, u2;

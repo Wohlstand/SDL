@@ -35,8 +35,9 @@
 
 char *
 SDL_GetBasePath(void)
-{ @autoreleasepool
 {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
     NSBundle *bundle = [NSBundle mainBundle];
     const char* baseType = [[[bundle infoDictionary] objectForKey:@"SDL_FILESYSTEM_BASE_DIR_TYPE"] UTF8String];
     const char *base = NULL;
@@ -63,19 +64,21 @@ SDL_GetBasePath(void)
             SDL_snprintf(retval, len, "%s/", base);
         }
     }
+    [pool drain];
 
     return retval;
-}}
+}
 
 char *
 SDL_GetPrefPath(const char *org, const char *app)
-{ @autoreleasepool
 {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     char *retval = NULL;
     NSArray *array;
 
     if (!app) {
         SDL_InvalidParamError("app");
+        [pool drain];
         return NULL;
     }
     if (!org) {
@@ -132,8 +135,9 @@ SDL_GetPrefPath(const char *org, const char *app)
         }
     }
 
+    [pool drain];
     return retval;
-}}
+}
 
 #endif /* SDL_FILESYSTEM_COCOA */
 

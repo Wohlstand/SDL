@@ -33,8 +33,8 @@
  Also, note the bundle layouts are different for iPhone and Mac.
 */
 FILE* SDL_OpenFPFromBundleOrFallback(const char *file, const char *mode)
-{ @autoreleasepool
 {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     FILE* fp = NULL;
     NSFileManager* file_manager;
     NSString* resource_path;
@@ -43,6 +43,7 @@ FILE* SDL_OpenFPFromBundleOrFallback(const char *file, const char *mode)
 
     /* If the file mode is writable, skip all the bundle stuff because generally the bundle is read-only. */
     if(strcmp("r", mode) && strcmp("rb", mode)) {
+        [pool drain];
         return fopen(file, mode);
     }
 
@@ -58,8 +59,9 @@ FILE* SDL_OpenFPFromBundleOrFallback(const char *file, const char *mode)
         fp = fopen(file, mode);
     }
 
+    [pool drain];
     return fp;
-}}
+}
 
 #endif /* __APPLE__ */
 

@@ -108,7 +108,7 @@
 /* if not compiling for iOS */
 #undef __MACOSX__
 #define __MACOSX__  1
-#if MAC_OS_X_VERSION_MIN_REQUIRED < 1070
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 1040
 # error SDL for Mac OS X only supports deploying on 10.7 and above.
 #endif /* MAC_OS_X_VERSION_MIN_REQUIRED < 1070 */
 #endif /* TARGET_OS_IPHONE */

@@ -26,7 +26,10 @@
 
 void
 SDL_SYS_GetPreferredLocales(char *buf, size_t buflen)
-{ @autoreleasepool {
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     NSArray *languages = NSLocale.preferredLanguages;
     size_t numlangs = 0;
     size_t i;
@@ -70,7 +73,27 @@ SDL_SYS_GetPreferredLocales(char *buf, size_t buflen)
             buflen--;
         }
     }
-}}
+
+#else /* For old Mac OS X 10.4 Tiger */
+    NSString *nsstr = [[NSLocale currentLocale] localeIdentifier];
+    char *ptr;
+
+    if (nsstr == nil) {
+        [pool drain];
+        return;
+    }
+
+    [nsstr getCString:buf maxLength:buflen encoding:NSASCIIStringEncoding];
+
+    // convert '-' to '_'...
+    //  These are always full lang-COUNTRY, so we search from the back,
+    //  so things like zh-Hant-CN find the right '-' to convert.
+    if ((ptr = SDL_strrchr(buf, '-')) != NULL) {
+        *ptr = '_';
+    }
+#endif
+
+    [pool drain];
+}
 
 /* vi: set ts=4 sw=4 expandtab: */
-
