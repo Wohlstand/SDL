@@ -447,9 +447,9 @@ macro(CheckX11)
       set(SDL_VIDEO_DRIVER_X11 1)
 
       # !!! FIXME: why is this disabled for Apple?
-      if(APPLE)
-        set(SDL_X11_SHARED OFF)
-      endif()
+#      if(APPLE)
+#        set(SDL_X11_SHARED OFF)
+#      endif()
 
       check_symbol_exists(shmat "sys/shm.h" HAVE_SHMAT_IN_LIBC)
       if(NOT HAVE_SHMAT_IN_LIBC)

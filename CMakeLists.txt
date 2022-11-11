@@ -2268,6 +2268,9 @@ elseif(APPLE)
     endif()
   endif()
 
+  if(SDL_X11)
+    CheckX11()
+  endif()
   CheckPTHREAD()
 
 elseif(HAIKU)
