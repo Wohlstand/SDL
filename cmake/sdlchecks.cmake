@@ -446,10 +446,15 @@ macro(CheckX11)
       list(APPEND SOURCE_FILES ${X11_SOURCES})
       set(SDL_VIDEO_DRIVER_X11 1)
 
+      if (MACOSX_TIGER) # Enable Mac OS X tiger specific tweaks
+        list(APPEND EXTRA_CFLAGS "-DSDL_X11_MACOSX_TIGER")
+      endif()
+
       # !!! FIXME: why is this disabled for Apple?
-#      if(APPLE)
-#        set(SDL_X11_SHARED OFF)
-#      endif()
+      # !!! Answer by Wohlstand: There are missing library name macros at SDL_x11dyn.c, and therefore it will always fail to load.
+      if(APPLE)
+        set(SDL_X11_SHARED OFF)
+      endif()
 
       check_symbol_exists(shmat "sys/shm.h" HAVE_SHMAT_IN_LIBC)
       if(NOT HAVE_SHMAT_IN_LIBC)
@@ -565,7 +570,7 @@ macro(CheckX11)
         set(HAVE_X11_XFIXES TRUE)
       endif()
 
-      if(SDL_X11_XRANDR AND HAVE_XRANDR_H AND XRANDR_LIB)
+      if(SDL_X11_XRANDR AND HAVE_XRANDR_H AND XRANDR_LIB AND NOT MACOSX_TIGER)
         if(HAVE_X11_SHARED)
           set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XRANDR "\"${XRANDR_LIB_SONAME}\"")
         else()
@@ -575,7 +580,7 @@ macro(CheckX11)
         set(HAVE_X11_XRANDR TRUE)
       endif()
 
-      if(SDL_X11_XSCRNSAVER AND HAVE_XSS_H AND XSS_LIB)
+      if(SDL_X11_XSCRNSAVER AND HAVE_XSS_H AND XSS_LIB AND NOT MACOSX_TIGER)
         if(HAVE_X11_SHARED)
           set(SDL_VIDEO_DRIVER_X11_DYNAMIC_XSS "\"${XSS_LIB_SONAME}\"")
         else()
@@ -726,7 +731,7 @@ endmacro()
 # - n/a
 #
 macro(CheckCOCOA)
-  if(SDL_COCOA)
+  if(SDL_COCOA AND NOT MACOSX_TIGER)
     if(APPLE) # Apple always has Cocoa.
       set(HAVE_COCOA TRUE)
     endif()
@@ -806,11 +811,17 @@ endmacro()
 # - nada
 macro(CheckGLX)
   if(SDL_OPENGL)
+    if (MACOSX_TIGER)
+      set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} /usr/X11R6/include/")
+    endif()
     check_c_source_compiles("
         #include <GL/glx.h>
         int main(int argc, char** argv) { return 0; }" HAVE_OPENGL_GLX)
     if(HAVE_OPENGL_GLX)
       set(SDL_VIDEO_OPENGL_GLX 1)
+      if (MACOSX_TIGER)
+        list(APPEND EXTRA_CFLAGS "-I/usr/X11R6/include/")
+      endif()
     endif()
   endif()
 endmacro()

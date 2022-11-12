@@ -39,6 +39,8 @@
  * the library was installed.
  */
 #define DEFAULT_OPENGL  "libGL.so"
+#elif defined(SDL_X11_MACOSX_TIGER)
+#define DEFAULT_OPENGL  "/usr/X11R6/lib/libGL.1.dylib"
 #elif defined(__MACOSX__)
 #define DEFAULT_OPENGL  "/opt/X11/lib/libGL.1.dylib"
 #elif defined(__QNXNTO__)
@@ -469,7 +471,9 @@ X11_GL_InitExtensions(_THIS)
     }
 
     if (context) {
+#if !defined(SDL_X11_MACOSX_TIGER) /* FIXME: Calling glXMakeCurrent with "None" context causes a dead lock */
         _this->gl_data->glXMakeCurrent(display, None, NULL);
+#endif
         _this->gl_data->glXDestroyContext(display, context);
         if (prev_ctx && prev_drawable) {
             _this->gl_data->glXMakeCurrent(display, prev_drawable, prev_ctx);
@@ -850,7 +854,7 @@ X11_GL_MakeCurrent(_THIS, SDL_Window * window, SDL_GLContext context)
     Window drawable =
         (context ? ((SDL_WindowData *) window->driverdata)->xwindow : None);
     GLXContext glx_context = (GLXContext) context;
-    int rc;
+    int rc = 0;
 
     if (!_this->gl_data) {
         return SDL_SetError("OpenGL not initialized");
@@ -862,7 +866,12 @@ X11_GL_MakeCurrent(_THIS, SDL_Window * window, SDL_GLContext context)
     errorBase = _this->gl_data->errorBase;
     errorCode = Success;
     handler = X11_XSetErrorHandler(X11_GL_ErrorHandler);
-    rc = _this->gl_data->glXMakeCurrent(display, drawable, glx_context);
+#if defined(SDL_X11_MACOSX_TIGER) /* FIXME: Calling glXMakeCurrent with "None" context causes a dead lock */
+    if (drawable != None)
+#endif
+    {
+        rc = _this->gl_data->glXMakeCurrent(display, drawable, glx_context);
+    }
     X11_XSetErrorHandler(handler);
 
     if (errorCode != Success) {   /* uhoh, an X error was thrown! */

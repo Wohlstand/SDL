@@ -67,7 +67,7 @@
 static struct timespec start_ts;
 #elif defined(__APPLE__)
 static uint64_t start_mach;
-mach_timebase_info_data_t mach_base_info;
+static mach_timebase_info_data_t mach_base_info;
 #endif
 static SDL_bool has_monotonic_time = SDL_FALSE;
 static struct timeval start_tv;
@@ -178,8 +178,8 @@ SDL_GetPerformanceFrequency(void)
         freq /= mach_base_info.numer;
         return freq;
 #endif
-    } 
-        
+    }
+
     return 1000000;
 }
 
