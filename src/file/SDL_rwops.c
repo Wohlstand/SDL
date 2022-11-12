@@ -50,7 +50,11 @@
 #include "SDL_rwops.h"
 
 #ifdef __APPLE__
-#include "cocoa/SDL_rwopsbundlesupport.h"
+# ifdef SDL_MACOSX_TIGER
+#  include "cocoatiger/SDL_rwopsbundlesupport.h"
+# else
+#  include "cocoa/SDL_rwopsbundlesupport.h"
+# endif
 #endif /* __APPLE__ */
 
 #ifdef __3DS__

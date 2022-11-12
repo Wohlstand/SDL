@@ -19,18 +19,12 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#include "../SDL_sysurl.h"
+#ifdef __APPLE__
 
-#import <Cocoa/Cocoa.h>
+#include <stdio.h>
 
-int
-SDL_SYS_OpenURL(const char *url)
-{ @autoreleasepool
-{
-    CFURLRef cfurl = CFURLCreateWithBytes(NULL, (const UInt8 *) url, SDL_strlen(url), kCFStringEncodingUTF8,  NULL);
-    OSStatus status = LSOpenCFURLRef(cfurl, NULL);
-    CFRelease(cfurl);
-    return status == noErr ? 0 : -1;
-}}
-
-/* vi: set ts=4 sw=4 expandtab: */
+#ifndef SDL_rwopsbundlesupport_h
+#define SDL_rwopsbundlesupport_h
+FILE* SDL_OpenFPFromBundleOrFallback(const char *file, const char *mode);
+#endif
+#endif

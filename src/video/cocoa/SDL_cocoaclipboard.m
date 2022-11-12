@@ -27,14 +27,13 @@
 
 int
 Cocoa_SetClipboardText(_THIS, const char *text)
+{ @autoreleasepool
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     SDL_VideoData *data = (__bridge SDL_VideoData *) _this->driverdata;
     NSPasteboard *pasteboard;
     NSString *format = NSPasteboardTypeString;
     NSString *nsstr = [NSString stringWithUTF8String:text];
     if (nsstr == nil) {
-        [pool drain];
         return SDL_SetError("Couldn't create NSString; is your string data in UTF-8 format?");
     }
 
@@ -42,15 +41,13 @@ Cocoa_SetClipboardText(_THIS, const char *text)
     data.clipboard_count = [pasteboard declareTypes:[NSArray arrayWithObject:format] owner:nil];
     [pasteboard setString:nsstr forType:format];
 
-    [pool drain];
-
     return 0;
-}
+}}
 
 char *
 Cocoa_GetClipboardText(_THIS)
+{ @autoreleasepool
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     NSPasteboard *pasteboard;
     NSString *format = NSPasteboardTypeString;
     NSString *available;
@@ -73,10 +70,8 @@ Cocoa_GetClipboardText(_THIS)
         text = SDL_strdup("");
     }
 
-    [pool drain];
-
     return text;
-}
+}}
 
 SDL_bool
 Cocoa_HasClipboardText(_THIS)
@@ -92,8 +87,8 @@ Cocoa_HasClipboardText(_THIS)
 
 void
 Cocoa_CheckClipboardUpdate(SDL_VideoData * data)
+{ @autoreleasepool
 {
-    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     NSPasteboard *pasteboard;
     NSInteger count;
 
@@ -105,8 +100,7 @@ Cocoa_CheckClipboardUpdate(SDL_VideoData * data)
         }
         data.clipboard_count = count;
     }
-    [pool drain];
-}
+}}
 
 #endif /* SDL_VIDEO_DRIVER_COCOA */
 

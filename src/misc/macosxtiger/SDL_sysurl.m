@@ -25,12 +25,13 @@
 
 int
 SDL_SYS_OpenURL(const char *url)
-{ @autoreleasepool
 {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     CFURLRef cfurl = CFURLCreateWithBytes(NULL, (const UInt8 *) url, SDL_strlen(url), kCFStringEncodingUTF8,  NULL);
     OSStatus status = LSOpenCFURLRef(cfurl, NULL);
     CFRelease(cfurl);
+    [pool drain];
     return status == noErr ? 0 : -1;
-}}
+}
 
 /* vi: set ts=4 sw=4 expandtab: */
