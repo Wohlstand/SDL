@@ -134,7 +134,6 @@ static void
 GuessXInputDevice(Uint8 userid, Uint16 *pVID, Uint16 *pPID, Uint16 *pVersion)
 {
 #if !defined(__WINRT__) && !defined(__XBOXONE__) && !defined(__XBOXSERIES__) /* TODO: remove this ifndef __WINRT__ block, but only after integrating with UWP/WinRT's HID API */
-
     PRAWINPUTDEVICELIST devices = NULL;
     UINT i, j, device_count = 0;
 
@@ -286,6 +285,8 @@ AddXInputDevice(Uint8 userid, BYTE SubType, JoyStick_DeviceData **pContext)
     }
     SDL_snprintf(pNewJoystick->path, sizeof(pNewJoystick->path), "XInput#%d", userid);
     if (!SDL_XInputUseOldJoystickMapping()) {
+        GuessXInputDevice(userid, &vendor, &product, &version);
+
         pNewJoystick->guid = SDL_CreateJoystickGUID(SDL_HARDWARE_BUS_USB, vendor, product, version, pNewJoystick->joystickname, 'x', SubType);
     }
     pNewJoystick->SubType = SubType;
