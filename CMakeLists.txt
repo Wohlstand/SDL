@@ -258,7 +258,7 @@ endif()
 
 # On the other hand, *BSD specifically uses libusb only, so we make a special
 #  case just for them.
-if(FREEBSD OR NETBSD OR OPENBSD OR BSDI)
+if(FREEBSD OR NETBSD OR OPENBSD OR BSDI OR MACOSX_TIGER)
   set(HIDAPI_ONLY_LIBUSB TRUE)
 else()
   set(HIDAPI_ONLY_LIBUSB FALSE)
@@ -564,6 +564,12 @@ if(SDL_HIDAPI)
   elseif(HIDAPI_SKIP_LIBUSB)
     set(SDL_HIDAPI_LIBUSB OFF CACHE BOOL "" FORCE)
   endif()
+endif()
+
+if(MACOSX_TIGER)
+  # These modules can't be properly built on Mac OS X Tiger
+  set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+  set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
 endif()
 
 if(VITA)
@@ -2055,11 +2061,11 @@ elseif(APPLE)
     endif()
   endif()
 
-  if(SDL_HIDAPI AND NOT MACOSX_TIGER)
+  if(SDL_HIDAPI)
     CheckHIDAPI()
   endif()
 
-  if(SDL_JOYSTICK AND NOT MACOSX_TIGER)
+  if(SDL_JOYSTICK)
     file(GLOB MFI_JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/iphoneos/*.m)
     if(IOS OR TVOS)
       file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/steam/*.c)

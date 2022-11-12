@@ -41,7 +41,7 @@
 #include "../core/windows/SDL_windows.h"
 #endif
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
 #include <IOKit/IOKitLib.h>
@@ -98,7 +98,7 @@ static struct
     double m_flLastWin32MessageCheck;
 #endif
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
     IONotificationPortRef m_notificationPort;
     mach_port_t m_notificationMach;
 #endif
@@ -160,7 +160,7 @@ static LRESULT CALLBACK ControllerWndProc(HWND hwnd, UINT message, WPARAM wParam
 #endif /* defined(__WIN32__) || defined(__WINGDK__) */
 
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
 static void CallbackIOServiceFunc(void *context, io_iterator_t portIterator)
 {
     /* Must drain the iterator, or we won't receive new notifications */
@@ -249,7 +249,7 @@ HIDAPI_InitializeDiscovery()
     }
 #endif /* defined(__WIN32__) || defined(__WINGDK__) */
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
     SDL_HIDAPI_discovery.m_notificationPort = IONotificationPortCreate(kIOMasterPortDefault);
     if (SDL_HIDAPI_discovery.m_notificationPort) {
         {
@@ -385,7 +385,7 @@ HIDAPI_UpdateDiscovery()
 #endif
 #endif /* defined(__WIN32__) || defined(__WINGDK__) */
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
     if (SDL_HIDAPI_discovery.m_notificationPort) {
         struct { mach_msg_header_t hdr; char payload[ 4096 ]; } msg;
         while (mach_msg(&msg.hdr, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(msg), SDL_HIDAPI_discovery.m_notificationMach, 0, MACH_PORT_NULL) == KERN_SUCCESS) {
@@ -486,7 +486,7 @@ HIDAPI_ShutdownDiscovery()
     UnregisterClassA(SDL_HIDAPI_discovery.m_wndClass.lpszClassName, SDL_HIDAPI_discovery.m_wndClass.hInstance);
 #endif
 
-#if defined(__MACOSX__)
+#if defined(__MACOSX__) && !defined(SDL_MACOSX_TIGER)
     if (SDL_HIDAPI_discovery.m_notificationPort) {
         IONotificationPortDestroy(SDL_HIDAPI_discovery.m_notificationPort);
     }
@@ -575,7 +575,7 @@ static const SDL_UDEV_Symbols *udev_ctx = NULL;
 #define HAVE_PLATFORM_BACKEND 1
 #endif /* SDL_USE_LIBUDEV */
 
-#elif __MACOSX__
+#elif __MACOSX__ && !defined(SDL_MACOSX_TIGER)
 #include "mac/hid.c"
 #define HAVE_PLATFORM_BACKEND 1
 #define udev_ctx 1
