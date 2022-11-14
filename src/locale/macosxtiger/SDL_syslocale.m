@@ -28,53 +28,6 @@ void
 SDL_SYS_GetPreferredLocales(char *buf, size_t buflen)
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
-    NSArray *languages = NSLocale.preferredLanguages;
-    size_t numlangs = 0;
-    size_t i;
-
-    numlangs = (size_t) [languages count];
-
-    for (i = 0; i < numlangs; i++) {
-        NSString *nsstr = [languages objectAtIndex:i];
-        size_t len;
-        char *ptr;
-
-        if (nsstr == nil) {
-            break;
-        }
-
-        [nsstr getCString:buf maxLength:buflen encoding:NSASCIIStringEncoding];
-        len = SDL_strlen(buf);
-
-        // convert '-' to '_'...
-        //  These are always full lang-COUNTRY, so we search from the back,
-        //  so things like zh-Hant-CN find the right '-' to convert.
-        if ((ptr = SDL_strrchr(buf, '-')) != NULL) {
-            *ptr = '_';
-        }
-
-        if (buflen <= len) {
-            *buf = '\0';  // drop this one and stop, we can't fit anymore.
-            break;
-        }
-
-        buf += len;
-        buflen -= len;
-
-        if (i < (numlangs - 1)) {
-            if (buflen <= 1) {
-                break;  // out of room, stop looking.
-            }
-            buf[0] = ',';  // add a comma between entries.
-            buf[1] = '\0';
-            buf++;
-            buflen--;
-        }
-    }
-
-#else /* For old Mac OS X 10.4 Tiger */
     NSString *nsstr = [[NSLocale currentLocale] localeIdentifier];
     char *ptr;
 
@@ -91,7 +44,6 @@ SDL_SYS_GetPreferredLocales(char *buf, size_t buflen)
     if ((ptr = SDL_strrchr(buf, '-')) != NULL) {
         *ptr = '_';
     }
-#endif
 
     [pool drain];
 }
