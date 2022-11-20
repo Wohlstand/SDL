@@ -67,8 +67,9 @@ include(CheckCXXCompilerFlag)
 include(CheckStructHasMember)
 include(CMakeDependentOption)
 include(CMakePushCheckState)
-include(FindPkgConfig)
 include(GNUInstallDirs)
+
+find_package(PkgConfig)
 
 list(APPEND CMAKE_MODULE_PATH "${SDL2_SOURCE_DIR}/cmake")
 include(${SDL2_SOURCE_DIR}/cmake/macros.cmake)
@@ -85,7 +86,7 @@ endif()
 # See docs/release_checklist.md
 set(SDL_MAJOR_VERSION 2)
 set(SDL_MINOR_VERSION 25)
-set(SDL_MICRO_VERSION 0)
+set(SDL_MICRO_VERSION 1)
 set(SDL_VERSION "${SDL_MAJOR_VERSION}.${SDL_MINOR_VERSION}.${SDL_MICRO_VERSION}")
 
 # Set defaults preventing destination file conflicts
@@ -394,7 +395,6 @@ if(EMSCRIPTEN)
   set(SDL_ATOMIC_ENABLED_BY_DEFAULT OFF)
   set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
   set(SDL_CPUINFO_ENABLED_BY_DEFAULT OFF)
-  set(SDL_TEST_ENABLED_BY_DEFAULT OFF)
 endif()
 
 if(VITA OR PSP OR PS2 OR N3DS)
@@ -525,6 +525,7 @@ dep_option(SDL_HIDAPI_JOYSTICK     "Use HIDAPI for low level joystick drivers" O
 dep_option(SDL_VIRTUAL_JOYSTICK    "Enable the virtual-joystick driver" ON SDL_HIDAPI OFF)
 set_option(SDL_ASAN                "Use AddressSanitizer to detect memory errors" OFF)
 option_string(SDL_VENDOR_INFO      "Vendor name and/or version to add to SDL_REVISION" "")
+set_option(SDL_CCACHE              "Use Ccache to speed up build" ON)
 
 option(SDL_WERROR "Enable -Werror" OFF)
 
@@ -1022,14 +1023,35 @@ if(SDL_LIBC)
     set(STDC_HEADERS 1)
   else()
     set(HAVE_LIBC TRUE)
-    check_include_file(sys/types.h HAVE_SYS_TYPES_H)
-    foreach(_HEADER
-            stdio.h stdlib.h stddef.h stdarg.h malloc.h memory.h string.h limits.h float.h
-            strings.h wchar.h inttypes.h stdint.h ctype.h math.h iconv.h signal.h libunwind.h)
+    set(headers_to_check
+        ctype.h
+        float.h
+        iconv.h
+        inttypes.h
+        limits.h
+        malloc.h
+        math.h
+        memory.h
+        signal.h
+        stdarg.h
+        stddef.h
+        stdint.h
+        stdio.h
+        stdlib.h
+        string.h
+        strings.h
+        sys/types.h
+        wchar.h
+    )
+    if(NOT EMSCRIPTEN)
+      list(APPEND headers_to_check libunwind.h)
+    endif()
+    foreach(_HEADER ${headers_to_check})
       string(TOUPPER "HAVE_${_HEADER}" _UPPER)
-      string(REPLACE "." "_" _HAVE_H ${_UPPER})
+      string(REGEX REPLACE "[./]" "_" _HAVE_H ${_UPPER})
       check_include_file("${_HEADER}" ${_HAVE_H})
     endforeach()
+    check_include_file(linux/input.h HAVE_LINUX_INPUT_H)
 
     set(STDC_HEADER_NAMES "stddef.h;stdarg.h;stdlib.h;string.h;stdio.h;wchar.h;float.h")
     check_include_files("${STDC_HEADER_NAMES}" STDC_HEADERS)
@@ -1398,6 +1420,10 @@ elseif(EMSCRIPTEN)
 
   CheckPTHREAD()
 
+  if(HAVE_LIBUNWIND_H)
+    list(APPEND EXTRA_TEST_LIBS unwind)
+  endif()
+
 elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
   if(SDL_AUDIO)
     if(SYSV5 OR SOLARIS OR HPUX)
@@ -1599,7 +1625,7 @@ elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
     if(FREEBSD OR NETBSD OR OPENBSD OR BSDI)
       CheckUSBHID()
     endif()
-    if(LINUX AND NOT ANDROID)
+    if(LINUX AND HAVE_LINUX_INPUT_H AND NOT ANDROID)
       set(SDL_JOYSTICK_LINUX 1)
       file(GLOB JOYSTICK_SOURCES ${SDL2_SOURCE_DIR}/src/joystick/linux/*.c ${SDL2_SOURCE_DIR}/src/joystick/steam/*.c)
       list(APPEND SOURCE_FILES ${JOYSTICK_SOURCES})
@@ -3166,6 +3192,19 @@ if (SDL_ASAN)
   # but causes warnings.
   if((NOT USE_CLANG) OR ("${CMAKE_BUILD_TYPE}" STREQUAL ""))
     asan_check_add_debug_flag("object-size")
+  endif()
+endif()
+
+if(SDL_CCACHE)
+  cmake_minimum_required(VERSION 3.4)
+  find_program(CCACHE_BINARY ccache)
+  if(CCACHE_BINARY)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_BINARY})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_BINARY})
+    set(CMAKE_OBJC_COMPILER_LAUNCHER ${CCACHE_BINARY})
+    set(HAVE_CCACHE ON)
+  else()
+    set(HAVE_CCACHE OFF)
   endif()
 endif()
 

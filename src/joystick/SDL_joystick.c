@@ -1432,7 +1432,7 @@ static void UpdateEventsForDeviceRemoval(int device_index, Uint32 type)
     SDL_small_free(events, isstack);
 }
 
-static void
+void
 SDL_PrivateJoystickForceRecentering(SDL_Joystick *joystick)
 {
     int i, j;
@@ -1798,7 +1798,7 @@ SDL_JoystickEventState(int state)
         break;
     default:
         for (i = 0; i < SDL_arraysize(event_list); ++i) {
-            SDL_EventState(event_list[i], state);
+            (void)SDL_EventState(event_list[i], state);
         }
         break;
     }

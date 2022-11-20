@@ -1,7 +1,6 @@
 /*
   Simple DirectMedia Layer
   Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
-  Copyright (C) 2022 Collabora Ltd.
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -19,31 +18,15 @@
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 */
-#include "../../SDL_internal.h"
 
-#include "SDL_sandbox.h"
+#ifndef SDL_keysym_to_scancode_c_h_
+#define SDL_keysym_to_scancode_c_h_
 
-#include <unistd.h>
+#include "SDL_scancode.h"
 
-SDL_Sandbox SDL_DetectSandbox(void)
-{
-    if (access("/.flatpak-info", F_OK) == 0) {
-        return SDL_SANDBOX_FLATPAK;
-    }
+/* This function only correctly maps letters and numbers for keyboards in US QWERTY layout */
+extern SDL_Scancode SDL_GetScancodeFromKeySym(Uint32 keysym, Uint32 keycode);
 
-    /* For Snap, we check multiple variables because they might be set for
-     * unrelated reasons. This is the same thing WebKitGTK does. */
-    if (SDL_getenv("SNAP") != NULL
-        && SDL_getenv("SNAP_NAME") != NULL
-        && SDL_getenv("SNAP_REVISION") != NULL) {
-        return SDL_SANDBOX_SNAP;
-    }
-
-    if (access("/run/host/container-runtime", F_OK) == 0) {
-        return SDL_SANDBOX_UNKNOWN_CONTAINER;
-    }
-
-    return SDL_SANDBOX_NONE;
-}
+#endif /* SDL_keysym_to_scancode_c_h_ */
 
 /* vi: set ts=4 sw=4 expandtab: */
