@@ -187,7 +187,8 @@ typedef enum
     SDL_DISPLAYEVENT_NONE,          /**< Never used */
     SDL_DISPLAYEVENT_ORIENTATION,   /**< Display orientation has changed to data1 */
     SDL_DISPLAYEVENT_CONNECTED,     /**< Display has been added to the system */
-    SDL_DISPLAYEVENT_DISCONNECTED   /**< Display has been removed from the system */
+    SDL_DISPLAYEVENT_DISCONNECTED,  /**< Display has been removed from the system */
+    SDL_DISPLAYEVENT_MOVED          /**< Display has changed position */
 } SDL_DisplayEventID;
 
 /**
@@ -1064,7 +1065,7 @@ extern DECLSPEC int SDLCALL SDL_GetWindowBordersSize(SDL_Window * window,
  * \sa SDL_CreateWindow
  * \sa SDL_GetWindowSize
  */
-extern DECLSPEC void SDLCALL SDL_GetWindowSizeInPixels(SDL_Window * window, 
+extern DECLSPEC void SDLCALL SDL_GetWindowSizeInPixels(SDL_Window * window,
                                                        int *w, int *h);
 
 /**

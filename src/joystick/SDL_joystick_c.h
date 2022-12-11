@@ -107,6 +107,7 @@ extern SDL_bool SDL_IsJoystickPS4(Uint16 vendor_id, Uint16 product_id);
 
 /* Function to return whether a joystick is a PS5 controller */
 extern SDL_bool SDL_IsJoystickPS5(Uint16 vendor_id, Uint16 product_id);
+extern SDL_bool SDL_IsJoystickDualSenseEdge(Uint16 vendor_id, Uint16 product_id);
 
 /* Function to return whether a joystick is a Nintendo Switch Pro controller */
 extern SDL_bool SDL_IsJoystickNintendoSwitchPro(Uint16 vendor_id, Uint16 product_id);
@@ -152,6 +153,7 @@ extern void SDL_PrivateJoystickAddTouchpad(SDL_Joystick *joystick, int nfingers)
 extern void SDL_PrivateJoystickAddSensor(SDL_Joystick *joystick, SDL_SensorType type, float rate);
 extern void SDL_PrivateJoystickAdded(SDL_JoystickID device_instance);
 extern void SDL_PrivateJoystickRemoved(SDL_JoystickID device_instance);
+extern void SDL_PrivateJoystickForceRecentering(SDL_Joystick *joystick);
 extern int SDL_PrivateJoystickAxis(SDL_Joystick *joystick,
                                    Uint8 axis, Sint16 value);
 extern int SDL_PrivateJoystickBall(SDL_Joystick *joystick,

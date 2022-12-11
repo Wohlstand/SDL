@@ -155,6 +155,7 @@ SDL_WAYLAND_SYM(int, xkb_keymap_key_get_syms_by_level, (struct xkb_keymap *,
 SDL_WAYLAND_SYM(uint32_t, xkb_keysym_to_utf32, (xkb_keysym_t) )
 SDL_WAYLAND_SYM(uint32_t, xkb_keymap_mod_get_index, (struct xkb_keymap *,
                                                       const char *) )
+SDL_WAYLAND_SYM(const char *, xkb_keymap_layout_get_name, (struct xkb_keymap*, xkb_layout_index_t))
 
 #ifdef HAVE_LIBDECOR_H
 SDL_WAYLAND_MODULE(WAYLAND_LIBDECOR)
@@ -210,7 +211,7 @@ SDL_WAYLAND_SYM(bool, libdecor_configuration_get_content_size, (struct libdecor_
                                                                 int *))
 SDL_WAYLAND_SYM(bool, libdecor_configuration_get_window_state, (struct libdecor_configuration *,\
                                                                 enum libdecor_window_state *))
-SDL_WAYLAND_SYM(bool, libdecor_dispatch, (struct libdecor *, int))
+SDL_WAYLAND_SYM(int, libdecor_dispatch, (struct libdecor *, int))
 #endif
 
 #undef SDL_WAYLAND_MODULE

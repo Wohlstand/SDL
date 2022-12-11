@@ -3453,7 +3453,7 @@ orig_CFLAGS="$CFLAGS"
 
 # See docs/release_checklist.md
 SDL_MAJOR_VERSION=2
-SDL_MINOR_VERSION=25
+SDL_MINOR_VERSION=27
 SDL_MICRO_VERSION=0
 SDL_VERSION=$SDL_MAJOR_VERSION.$SDL_MINOR_VERSION.$SDL_MICRO_VERSION
 
@@ -17652,6 +17652,79 @@ printf "%s\n" "$ac_cv_path_EGREP" >&6; }
  EGREP="$ac_cv_path_EGREP"
 
 
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for fgrep" >&5
+printf %s "checking for fgrep... " >&6; }
+if test ${ac_cv_path_FGREP+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  if echo 'ab*c' | $GREP -F 'ab*c' >/dev/null 2>&1
+   then ac_cv_path_FGREP="$GREP -F"
+   else
+     if test -z "$FGREP"; then
+  ac_path_FGREP_found=false
+  # Loop through the user's path and test for each of PROGNAME-LIST
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH$PATH_SEPARATOR/usr/xpg4/bin
+do
+  IFS=$as_save_IFS
+  case $as_dir in #(((
+    '') as_dir=./ ;;
+    */) ;;
+    *) as_dir=$as_dir/ ;;
+  esac
+    for ac_prog in fgrep
+   do
+    for ac_exec_ext in '' $ac_executable_extensions; do
+      ac_path_FGREP="$as_dir$ac_prog$ac_exec_ext"
+      as_fn_executable_p "$ac_path_FGREP" || continue
+# Check for GNU ac_path_FGREP and select it if it is found.
+  # Check for GNU $ac_path_FGREP
+case `"$ac_path_FGREP" --version 2>&1` in
+*GNU*)
+  ac_cv_path_FGREP="$ac_path_FGREP" ac_path_FGREP_found=:;;
+*)
+  ac_count=0
+  printf %s 0123456789 >"conftest.in"
+  while :
+  do
+    cat "conftest.in" "conftest.in" >"conftest.tmp"
+    mv "conftest.tmp" "conftest.in"
+    cp "conftest.in" "conftest.nl"
+    printf "%s\n" 'FGREP' >> "conftest.nl"
+    "$ac_path_FGREP" FGREP < "conftest.nl" >"conftest.out" 2>/dev/null || break
+    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
+    as_fn_arith $ac_count + 1 && ac_count=$as_val
+    if test $ac_count -gt ${ac_path_FGREP_max-0}; then
+      # Best one so far, save it but keep looking for a better one
+      ac_cv_path_FGREP="$ac_path_FGREP"
+      ac_path_FGREP_max=$ac_count
+    fi
+    # 10*(2^10) chars as input seems more than enough
+    test $ac_count -gt 10 && break
+  done
+  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
+esac
+
+      $ac_path_FGREP_found && break 3
+    done
+  done
+  done
+IFS=$as_save_IFS
+  if test -z "$ac_cv_path_FGREP"; then
+    as_fn_error $? "no acceptable fgrep could be found in $PATH$PATH_SEPARATOR/usr/xpg4/bin" "$LINENO" 5
+  fi
+else
+  ac_cv_path_FGREP=$FGREP
+fi
+
+   fi
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_FGREP" >&5
+printf "%s\n" "$ac_cv_path_FGREP" >&6; }
+ FGREP="$ac_cv_path_FGREP"
+
+
 
   # Find a good install program.  We prefer a C program (faster),
 # so one script is as good as another.  But avoid the broken or
@@ -18292,8 +18365,8 @@ base_libdir=`echo \${libdir} | sed 's/.*\/\(.*\)/\1/; q'`
 
 find_lib()
 {
-    gcc_bin_path=`$CC -print-search-dirs 2>/dev/null | fgrep programs: | sed 's/[^=]*=\(.*\)/\1/' | sed 's/:/ /g'`
-    gcc_lib_path=`$CC -print-search-dirs 2>/dev/null | fgrep libraries: | sed 's/[^=]*=\(.*\)/\1/' | sed 's/:/ /g'`
+    gcc_bin_path=`$CC -print-search-dirs 2>/dev/null | $FGREP programs: | sed 's/[^=]*=\(.*\)/\1/' | sed 's/:/ /g'`
+    gcc_lib_path=`$CC -print-search-dirs 2>/dev/null | $FGREP libraries: | sed 's/[^=]*=\(.*\)/\1/' | sed 's/:/ /g'`
     env_lib_path=`echo $LIBS $LDFLAGS $* | sed 's/-L[ ]*//g'`
     if test "$cross_compiling" = yes; then
         host_lib_path=""
@@ -18815,6 +18888,12 @@ ac_fn_c_check_header_compile "$LINENO" "signal.h" "ac_cv_header_signal_h" "$ac_i
 if test "x$ac_cv_header_signal_h" = xyes
 then :
   printf "%s\n" "#define HAVE_SIGNAL_H 1" >>confdefs.h
+
+fi
+ac_fn_c_check_header_compile "$LINENO" "linux/input.h" "ac_cv_header_linux_input_h" "$ac_includes_default"
+if test "x$ac_cv_header_linux_input_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_LINUX_INPUT_H 1" >>confdefs.h
 
 fi
 
@@ -19528,6 +19607,12 @@ ac_fn_c_check_func "$LINENO" "strncasecmp" "ac_cv_func_strncasecmp"
 if test "x$ac_cv_func_strncasecmp" = xyes
 then :
   printf "%s\n" "#define HAVE_STRNCASECMP 1" >>confdefs.h
+
+fi
+ac_fn_c_check_func "$LINENO" "strcasestr" "ac_cv_func_strcasestr"
+if test "x$ac_cv_func_strcasestr" = xyes
+then :
+  printf "%s\n" "#define HAVE_STRCASESTR 1" >>confdefs.h
 
 fi
 ac_fn_c_check_func "$LINENO" "vsscanf" "ac_cv_func_vsscanf"
@@ -28492,15 +28577,17 @@ printf "%s\n" "#define SDL_AUDIO_DRIVER_AAUDIO 1" >>confdefs.h
         if test x$enable_joystick = xyes; then
           case $ARCH in
             linux)
+                if test "x$ac_cv_header_linux_input_h" = xyes; then
 
 printf "%s\n" "#define SDL_JOYSTICK_LINUX 1" >>confdefs.h
 
-                SOURCES="$SOURCES $srcdir/src/joystick/linux/*.c"
-                SOURCES="$SOURCES $srcdir/src/joystick/steam/*.c"
-                have_joystick=yes
+                    SOURCES="$SOURCES $srcdir/src/joystick/linux/*.c"
+                    SOURCES="$SOURCES $srcdir/src/joystick/steam/*.c"
+                    have_joystick=yes
+                fi
             ;;
             freebsd)
-                if test x$use_input_events = xyes; then
+                if test x$use_input_events = xyes -a x$ac_cv_header_linux_input_h = xyes; then
 
 printf "%s\n" "#define SDL_JOYSTICK_LINUX 1" >>confdefs.h
 
