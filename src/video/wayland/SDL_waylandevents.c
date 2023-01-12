@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -1248,14 +1248,15 @@ static void keyboard_handle_modifiers(void *data, struct wl_keyboard *keyboard,
     WAYLAND_xkb_state_update_mask(input->xkb.state, mods_depressed, mods_latched,
                                   mods_locked, 0, 0, group);
 
+    SDL_ToggleModState(KMOD_NUM, modstate & input->xkb.idx_num);
+    SDL_ToggleModState(KMOD_CAPS, modstate & input->xkb.idx_caps);
+
     /* Toggle the modifier states for virtual keyboards, as they may not send key presses. */
     if (input->keyboard_is_virtual) {
         SDL_ToggleModState(KMOD_SHIFT, modstate & input->xkb.idx_shift);
         SDL_ToggleModState(KMOD_CTRL, modstate & input->xkb.idx_ctrl);
         SDL_ToggleModState(KMOD_ALT, modstate & input->xkb.idx_alt);
         SDL_ToggleModState(KMOD_GUI, modstate & input->xkb.idx_gui);
-        SDL_ToggleModState(KMOD_NUM, modstate & input->xkb.idx_num);
-        SDL_ToggleModState(KMOD_CAPS, modstate & input->xkb.idx_caps);
     }
 
     /* If a key is repeating, update the text to apply the modifier. */
@@ -1557,6 +1558,14 @@ static void data_device_handle_enter(void *data, struct wl_data_device *wl_data_
             wl_data_offer_set_actions(data_device->drag_offer->offer,
                                       dnd_action, dnd_action);
         }
+
+        /* find the current window */
+        if (surface && SDL_WAYLAND_own_surface(surface)) {
+           SDL_WindowData *window = (SDL_WindowData *)wl_surface_get_user_data(surface);
+           if (window) {
+              data_device->dnd_window = window->sdlwindow;
+           }
+        }
     }
 }
 
@@ -1712,11 +1721,11 @@ static void data_device_handle_drop(void *data, struct wl_data_device *wl_data_d
             while (token != NULL) {
                 char *fn = Wayland_URIToLocal(token);
                 if (fn) {
-                    SDL_SendDropFile(NULL, fn); /* FIXME: Window? */
+                    SDL_SendDropFile(data_device->dnd_window, fn);
                 }
                 token = SDL_strtokr(NULL, "\r\n", &saveptr);
             }
-            SDL_SendDropComplete(NULL); /* FIXME: Window? */
+            SDL_SendDropComplete(data_device->dnd_window);
             SDL_free(buffer);
         }
     }

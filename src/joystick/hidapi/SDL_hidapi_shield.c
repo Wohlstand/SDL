@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -148,7 +148,7 @@ static int HIDAPI_DriverShield_SendCommand(SDL_HIDAPI_Device *device, Uint8 cmd,
         return SDL_SetError("Command data exceeds HID report size");
     }
 
-    if (SDL_HIDAPI_LockRumble() < 0) {
+    if (SDL_HIDAPI_LockRumble() != 0) {
         return -1;
     }
 
@@ -174,6 +174,8 @@ static int HIDAPI_DriverShield_SendCommand(SDL_HIDAPI_Device *device, Uint8 cmd,
 static SDL_bool HIDAPI_DriverShield_OpenJoystick(SDL_HIDAPI_Device *device, SDL_Joystick *joystick)
 {
     SDL_DriverShield_Context *ctx = (SDL_DriverShield_Context *)device->context;
+
+    SDL_AssertJoysticksLocked();
 
     ctx->rumble_report_pending = SDL_FALSE;
     ctx->rumble_update_pending = SDL_FALSE;

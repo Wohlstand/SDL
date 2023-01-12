@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -234,7 +234,7 @@ static void SendAckIfNeeded(SDL_HIDAPI_Device *device, const Uint8 *data, int si
 #ifdef DEBUG_XBOX_PROTOCOL
         HIDAPI_DumpPacket("Xbox One sending ACK packet: size = %d", ack_packet, sizeof(ack_packet));
 #endif
-        if (SDL_HIDAPI_LockRumble() < 0 ||
+        if (SDL_HIDAPI_LockRumble() != 0 ||
             SDL_HIDAPI_SendRumbleAndUnlock(device, ack_packet, sizeof(ack_packet)) != sizeof(ack_packet)) {
             SDL_SetError("Couldn't send ack packet");
         }
@@ -254,7 +254,7 @@ static SDL_bool SendSerialRequest(SDL_HIDAPI_Device *device, SDL_DriverXboxOne_C
      * It will cancel the announce packet if sent before that, and will be
      * ignored if sent during the negotiation.
      */
-    if (SDL_HIDAPI_LockRumble() < 0 ||
+    if (SDL_HIDAPI_LockRumble() != 0 ||
         SDL_HIDAPI_SendRumbleAndUnlock(device, serial_packet, sizeof(serial_packet)) != sizeof(serial_packet)) {
         SDL_SetError("Couldn't send serial packet");
         return SDL_FALSE;
@@ -312,7 +312,7 @@ static SDL_bool SendControllerInit(SDL_HIDAPI_Device *device, SDL_DriverXboxOne_
 #endif
         ctx->send_time = SDL_GetTicks();
 
-        if (SDL_HIDAPI_LockRumble() < 0 ||
+        if (SDL_HIDAPI_LockRumble() != 0 ||
             SDL_HIDAPI_SendRumbleAndUnlock(device, init_packet, packet->size) != packet->size) {
             SDL_SetError("Couldn't write Xbox One initialization packet");
             return SDL_FALSE;
@@ -415,6 +415,8 @@ static SDL_bool HIDAPI_DriverXboxOne_OpenJoystick(SDL_HIDAPI_Device *device, SDL
 {
     SDL_DriverXboxOne_Context *ctx = (SDL_DriverXboxOne_Context *)device->context;
 
+    SDL_AssertJoysticksLocked();
+
     ctx->low_frequency_rumble = 0;
     ctx->high_frequency_rumble = 0;
     ctx->left_trigger_rumble = 0;
@@ -478,7 +480,7 @@ static int HIDAPI_DriverXboxOne_UpdateRumble(SDL_HIDAPI_Device *device)
     /* We're no longer pending, even if we fail to send the rumble below */
     ctx->rumble_pending = SDL_FALSE;
 
-    if (SDL_HIDAPI_LockRumble() < 0) {
+    if (SDL_HIDAPI_LockRumble() != 0) {
         return -1;
     }
 
@@ -684,6 +686,7 @@ static void HIDAPI_DriverXboxOne_HandleStatePacket(SDL_Joystick *joystick, SDL_D
          * Xbox Series X firmware version 5.1, report is 44 bytes, share button is in byte 18
          * Xbox Series X firmware version 5.5, report is 48 bytes, share button is in byte 22
          * Victrix Gambit Tournament Controller, report is 50 bytes, share button is in byte 32
+         * ThrustMaster eSwap PRO Controller Xbox, report is 64 bytes, share button is in byte 46
          */
         if (size < 48) {
             if (ctx->last_state[18] != data[18]) {
@@ -696,6 +699,10 @@ static void HIDAPI_DriverXboxOne_HandleStatePacket(SDL_Joystick *joystick, SDL_D
         } else if (size == 50) {
             if (ctx->last_state[32] != data[32]) {
                 SDL_PrivateJoystickButton(joystick, SDL_CONTROLLER_BUTTON_MISC1, (data[32] & 0x01) ? SDL_PRESSED : SDL_RELEASED);
+            }
+        } else if (size == 64) {
+            if (ctx->last_state[46] != data[46]) {
+                SDL_PrivateJoystickButton(joystick, SDL_CONTROLLER_BUTTON_MISC1, (data[46] & 0x01) ? SDL_PRESSED : SDL_RELEASED);
             }
         }
     }

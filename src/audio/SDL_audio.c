@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -301,14 +301,14 @@ static SDL_INLINE SDL_bool is_in_audio_device_thread(SDL_AudioDevice *device)
     return SDL_FALSE;
 }
 
-static void SDL_AudioLockDevice_Default(SDL_AudioDevice *device)
+static void SDL_AudioLockDevice_Default(SDL_AudioDevice *device) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang assumes recursive locks */
 {
     if (!is_in_audio_device_thread(device)) {
         SDL_LockMutex(device->mixer_lock);
     }
 }
 
-static void SDL_AudioUnlockDevice_Default(SDL_AudioDevice *device)
+static void SDL_AudioUnlockDevice_Default(SDL_AudioDevice *device) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang assumes recursive locks */
 {
     if (!is_in_audio_device_thread(device)) {
         SDL_UnlockMutex(device->mixer_lock);

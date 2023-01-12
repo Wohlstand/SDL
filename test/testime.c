@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -689,7 +689,6 @@ int main(int argc, char *argv[])
             SDLTest_CommonEvent(state, &event, &done);
             switch (event.type) {
             case SDL_KEYDOWN:
-            {
                 switch (event.key.keysym.sym) {
                 case SDLK_RETURN:
                     text[0] = 0x00;
@@ -764,7 +763,6 @@ int main(int argc, char *argv[])
                 cursor = event.edit.start;
                 Redraw();
                 break;
-            } break;
             }
         }
     }

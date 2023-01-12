@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -336,15 +336,9 @@ void SDL_LogMessageV(int category, SDL_LogPriority priority, const char *fmt, va
         }
     }
 
-    if (log_function_mutex) {
-        SDL_LockMutex(log_function_mutex);
-    }
-
+    SDL_LockMutex(log_function_mutex);
     SDL_log_function(SDL_log_userdata, category, priority, message);
-
-    if (log_function_mutex) {
-        SDL_UnlockMutex(log_function_mutex);
-    }
+    SDL_UnlockMutex(log_function_mutex);
 
     /* Free only if dynamically allocated */
     if (message != stack_buf) {

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -100,7 +100,7 @@ int SDL_SemWait(SDL_sem *sem)
 
 int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
 {
-    int retval;
+    int retval = 0;
 #ifdef HAVE_SEM_TIMEDWAIT
 #ifndef HAVE_CLOCK_GETTIME
     struct timeval now;

@@ -18,6 +18,9 @@ endif()
 set(EXTRA_LIBS)
 set(EXTRA_LDFLAGS)
 
+set(CMAKE_DEPENDS)
+set(PKGCONFIG_DEPENDS)
+
 # This is a virtual "library" that just exists to collect up compiler and
 #  linker options that used to be global to this CMake project. When you
 #  specify it as part of a real library's target_link_libraries(), that
@@ -27,7 +30,6 @@ set(EXTRA_LDFLAGS)
 add_library(sdl-build-options INTERFACE)
 
 if(WINDOWS_STORE)
-  cmake_minimum_required(VERSION 3.11.0)
   target_compile_definitions(sdl-build-options INTERFACE "-DSDL_BUILDING_WINRT=1")
   target_compile_options(sdl-build-options INTERFACE "-ZW")
 endif()
@@ -295,6 +297,8 @@ if(WINDOWS)
   set(CMAKE_SHARED_LIBRARY_PREFIX "")
 endif()
 
+set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -D_GNU_SOURCE=1")
+
 # Emscripten toolchain has a nonempty default value for this, and the checks
 # in this file need to change that, so remember the original value, and
 # restore back to that afterwards. For check_function_exists() to work in
@@ -488,26 +492,6 @@ dep_option(SDL_TESTS           "Build the test directory" OFF SDL_TEST OFF)
 set_option(SDL_INSTALL_TESTS   "Install test-cases" OFF)
 
 set(HAVE_STATIC_PIC "${SDL_STATIC_PIC}")
-
-if(SDL_WERROR)
-  if(MSVC)
-    cmake_push_check_state(RESET)
-    check_c_compiler_flag(/WX HAVE_WX)
-    if(HAVE_WX)
-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
-    endif()
-  elseif(USE_GCC OR USE_CLANG)
-    cmake_push_check_state(RESET)
-    check_c_compiler_flag(-Werror HAVE_WERROR)
-    if(HAVE_WERROR)
-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-      set(CMAKE_OBJC_FLAGS "${CMAKE_OBJC_FLAGS} -Werror")
-    endif()
-    cmake_pop_check_state()
-  endif()
-endif()
 
 if(SDL_HIDAPI)
   if(HIDAPI_ONLY_LIBUSB)
@@ -879,33 +863,33 @@ if(SDL_ASSEMBLY)
     if(SDL_LSX)
       cmake_push_check_state()
       list(APPEND CMAKE_REQUIRED_FLAGS "-mlsx")
-      check_c_source_compiles([[
+      check_c_source_compiles("
           #ifndef __loongarch_sx
           #error Assembler CPP flag not enabled
           #endif
-        ]] CPU_HAS_LSX)
+          int main(int argc, char **argv) { return 0; }" CPU_SUPPORTS_LSX)
       check_include_file("lsxintrin.h" HAVE_LSXINTRIN_H)
       cmake_pop_check_state()
 
-      if(CPU_HAS_LSX AND HAVE_LSXINTRIN_H)
+      if(CPU_SUPPORTS_LSX AND HAVE_LSXINTRIN_H)
         list(APPEND EXTRA_CFLAGS "-mlsx")
-        set(HAS_LSX TRUE)
+        set(HAVE_LSX TRUE)
       endif()
     endif()
 
     if(SDL_LASX)
       cmake_push_check_state()
       list(APPEND CMAKE_REQUIRED_FLAGS "-mlasx")
-      check_c_source_compiles([[
+      check_c_source_compiles("
           #ifndef __loongarch_asx
           #error Assembler CPP flag not enabled
           #endif
-        ]] CPU_HAS_LASX)
+          int main(int argc, char **argv) { return 0; }" CPU_SUPPORTS_LASX)
       check_include_file("lasxintrin.h" HAVE_LASXINTRIN_H)
       cmake_pop_check_state()
-      if(CPU_HAS_LASX AND HAVE_LASXINTRIN_H)
+      if(CPU_SUPPORTS_LASX AND HAVE_LASXINTRIN_H)
         list(APPEND EXTRA_CFLAGS "-mlasx")
-        set(HAS_LASX TRUE)
+        set(HAVE_LASX TRUE)
       endif()
     endif()
 
@@ -1082,7 +1066,8 @@ if(SDL_LIBC)
     check_library_exists(m pow "" HAVE_LIBM)
     if(HAVE_LIBM)
       set(CMAKE_REQUIRED_LIBRARIES m)
-      foreach(_FN
+    endif()
+    foreach(_FN
               atan atan2 atanf atan2f ceil ceilf copysign copysignf cos cosf
               exp expf fabs fabsf floor floorf fmod fmodf log logf log10 log10f
               lround lroundf pow powf round roundf scalbn scalbnf sin sinf sqrt
@@ -1090,7 +1075,8 @@ if(SDL_LIBC)
         string(TOUPPER ${_FN} _UPPER)
         set(_HAVEVAR "HAVE_${_UPPER}")
         check_symbol_exists("${_FN}" "math.h" ${_HAVEVAR})
-      endforeach()
+    endforeach()
+    if(HAVE_LIBM)
       set(CMAKE_REQUIRED_LIBRARIES)
       if(NOT VITA)
         list(APPEND EXTRA_LIBS m)
@@ -2994,6 +2980,26 @@ if(NOT SDLMAIN_SOURCES)
   file(GLOB SDLMAIN_SOURCES ${SDL2_SOURCE_DIR}/src/main/dummy/*.c)
 endif()
 
+if(SDL_WERROR)
+  if(MSVC)
+    cmake_push_check_state(RESET)
+    check_c_compiler_flag(/WX HAVE_WX)
+    if(HAVE_WX)
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
+    endif()
+  elseif(USE_GCC OR USE_CLANG)
+    cmake_push_check_state(RESET)
+    check_c_compiler_flag(-Werror HAVE_WERROR)
+    if(HAVE_WERROR)
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+      set(CMAKE_OBJC_FLAGS "${CMAKE_OBJC_FLAGS} -Werror")
+    endif()
+    cmake_pop_check_state()
+  endif()
+endif()
+
 # Append the -MMD -MT flags
 # if(DEPENDENCY_TRACKING)
 #   if(COMPILER_IS_GNUCC)
@@ -3127,6 +3133,7 @@ string(REGEX REPLACE "-lSDL2( |$)" "-l${sdl_static_libname} " SDL_STATIC_LIBS "$
 if(NOT SDL_SHARED)
   string(REGEX REPLACE "-lSDL2( |$)" "-l${sdl_static_libname} " SDL_LIBS "${SDL_LIBS}")
 endif()
+listtostr(PKGCONFIG_DEPENDS PKGCONFIG_DEPENDS)
 
 if(SDL_STATIC AND SDL_SHARED AND NOT sdl_static_libname STREQUAL "SDL2")
   message(STATUS "\"pkg-config --static --libs sdl2\" will return invalid information")
@@ -3207,7 +3214,7 @@ if (SDL_ASAN)
   endif()
 endif()
 
-if(SDL_CCACHE)
+if(SDL_CCACHE AND NOT CMAKE_VERSION VERSION_LESS 3.4)
   cmake_minimum_required(VERSION 3.4)
   find_program(CCACHE_BINARY ccache)
   if(CCACHE_BINARY)
@@ -3218,6 +3225,8 @@ if(SDL_CCACHE)
   else()
     set(HAVE_CCACHE OFF)
   endif()
+else()
+  set(HAVE_CCACHE OFF)
 endif()
 
 if(SDL_TESTS)
@@ -3387,12 +3396,13 @@ if(SDL_SHARED)
     set_target_properties(SDL2 PROPERTIES STATIC_LIBRARY_FLAGS "/NODEFAULTLIB")
   endif()
   # FIXME: if CMAKE_VERSION >= 3.13, use target_link_options for EXTRA_LDFLAGS
-  target_link_libraries(SDL2 PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS} ${EXTRA_LDFLAGS_BUILD})
+  target_link_libraries(SDL2 PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS} ${EXTRA_LDFLAGS_BUILD} ${CMAKE_DEPENDS})
   target_include_directories(SDL2 PUBLIC
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include>"
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>>"
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/SDL2>")
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/SDL2>"
+  )
   # This picks up all the compiler options and such we've accumulated up to here.
   target_link_libraries(SDL2 PRIVATE $<BUILD_INTERFACE:sdl-build-options>)
   if(MINGW OR CYGWIN)
@@ -3419,12 +3429,13 @@ if(SDL_STATIC)
   target_compile_definitions(SDL2-static PRIVATE SDL_STATIC_LIB)
   # TODO: Win32 platforms keep the same suffix .lib for import and static
   # libraries - do we need to consider this?
-  target_link_libraries(SDL2-static PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS})
+  target_link_libraries(SDL2-static PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS} ${CMAKE_DEPENDS})
   target_include_directories(SDL2-static PUBLIC
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include>"
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>>"
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/SDL2>")
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/SDL2>"
+  )
   # This picks up all the compiler options and such we've accumulated up to here.
   target_link_libraries(SDL2-static PRIVATE $<BUILD_INTERFACE:sdl-build-options>)
   if(NOT ANDROID)
@@ -3558,6 +3569,7 @@ if(NOT SDL2_DISABLE_INSTALL)
     FILES
       ${CMAKE_CURRENT_BINARY_DIR}/SDL2Config.cmake
       ${CMAKE_CURRENT_BINARY_DIR}/SDL2ConfigVersion.cmake
+      ${SDL2_SOURCE_DIR}/cmake/sdlfind.cmake
     DESTINATION "${SDL_INSTALL_CMAKEDIR}"
     COMPONENT Devel
   )

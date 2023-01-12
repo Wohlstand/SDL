@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -150,7 +150,7 @@ void SDL_SYS_SetupThread(const char *name)
     if (name != NULL) {
 #ifndef __WINRT__ /* !!! FIXME: There's no LoadLibrary() in WinRT; don't know if SetThreadDescription is available there at all at the moment. */
         static pfnSetThreadDescription pSetThreadDescription = NULL;
-        static HMODULE kernel32 = 0;
+        static HMODULE kernel32 = NULL;
 
         if (!kernel32) {
             kernel32 = GetModuleHandle(TEXT("kernel32.dll"));

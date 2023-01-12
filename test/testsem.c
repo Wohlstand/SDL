@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -210,6 +210,8 @@ TestOverheadContended(SDL_bool try_wait)
         }
         /* Make sure threads consumed everything */
         while (SDL_SemValue(sem)) {
+            /* Friendlier with cooperative threading models */
+            SDL_Delay(1);
         }
     }
     end_ticks = SDL_GetTicks();

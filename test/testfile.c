@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -13,18 +13,17 @@
 /* sanity tests on SDL_rwops.c (usefull for alternative implementations of stdio rwops) */
 
 /* quiet windows compiler warnings */
+#if defined(_MSC_VER) && !defined(_CRT_NONSTDC_NO_WARNINGS)
 #define _CRT_NONSTDC_NO_WARNINGS
+#endif
 
+#include <stdio.h>
 #include <stdlib.h>
-
 #ifndef _MSC_VER
 #include <unistd.h>
 #endif
 
 #include "SDL.h"
-
-
-#include <stdio.h>
 
 /* WARNING ! those 2 files will be destroyed by this test program */
 

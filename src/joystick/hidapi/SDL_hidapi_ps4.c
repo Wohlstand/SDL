@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -273,6 +273,10 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
         }
         device->is_bluetooth = SDL_FALSE;
         ctx->enhanced_mode = SDL_TRUE;
+    } else if (device->vendor_id == USB_VENDOR_SONY && device->product_id == USB_PRODUCT_SONY_DS4_STRIKEPAD) {
+        device->is_bluetooth = SDL_FALSE;
+        ctx->enhanced_mode = SDL_TRUE;
+
     } else if (device->vendor_id == USB_VENDOR_SONY) {
         /* This will fail if we're on Bluetooth */
         size = ReadFeatureReport(device->dev, k_ePS4FeatureReportIdSerialNumber, data, sizeof(data));
@@ -310,13 +314,7 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
 
     size = ReadFeatureReport(device->dev, k_ePS4FeatureReportIdCapabilities, data, sizeof data);
     /* Get the device capabilities */
-    if (device->vendor_id == USB_VENDOR_SONY) {
-        ctx->official_controller = SDL_TRUE;
-        ctx->sensors_supported = SDL_TRUE;
-        ctx->lightbar_supported = SDL_TRUE;
-        ctx->vibration_supported = SDL_TRUE;
-        ctx->touchpad_supported = SDL_TRUE;
-    } else if (size == 48 && data[2] == 0x27) {
+    if (size == 48 && data[2] == 0x27) {
         Uint8 capabilities = data[4];
         Uint8 device_type = data[5];
 
@@ -362,6 +360,12 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
             joystick_type = SDL_JOYSTICK_TYPE_UNKNOWN;
             break;
         }
+    } else if (device->vendor_id == USB_VENDOR_SONY) {
+        ctx->official_controller = SDL_TRUE;
+        ctx->sensors_supported = SDL_TRUE;
+        ctx->lightbar_supported = SDL_TRUE;
+        ctx->vibration_supported = SDL_TRUE;
+        ctx->touchpad_supported = SDL_TRUE;
     } else if (device->vendor_id == USB_VENDOR_RAZER) {
         /* The Razer Raiju doesn't respond to the detection protocol, but has a touchpad and vibration */
         ctx->vibration_supported = SDL_TRUE;
@@ -385,7 +389,7 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
 
     device->joystick_type = joystick_type;
     device->type = SDL_CONTROLLER_TYPE_PS4;
-    if (device->vendor_id == USB_VENDOR_SONY) {
+    if (ctx->official_controller) {
         HIDAPI_SetDeviceName(device, "PS4 Controller");
     }
     HIDAPI_SetDeviceSerial(device, serial);
@@ -663,6 +667,8 @@ static void HIDAPI_DriverPS4_SetDevicePlayerIndex(SDL_HIDAPI_Device *device, SDL
 static SDL_bool HIDAPI_DriverPS4_OpenJoystick(SDL_HIDAPI_Device *device, SDL_Joystick *joystick)
 {
     SDL_DriverPS4_Context *ctx = (SDL_DriverPS4_Context *)device->context;
+
+    SDL_AssertJoysticksLocked();
 
     ctx->joystick = joystick;
     ctx->last_packet = SDL_GetTicks();

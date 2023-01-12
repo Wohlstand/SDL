@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -232,6 +232,12 @@ void SDLTest_LogAllocations()
     if (!SDL_malloc_orig) {
         return;
     }
+
+    message = SDL_realloc_orig(NULL, 1);
+    if (!message) {
+        return;
+    }
+    *message = 0;
 
 #define ADD_LINE()                                         \
     message_size += (SDL_strlen(line) + 1);                \

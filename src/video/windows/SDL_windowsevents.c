@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -1316,8 +1316,10 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_SYSCOMMAND:
     {
-        if ((wParam & 0xFFF0) == SC_KEYMENU) {
-            return 0;
+        if (!g_WindowsEnableMenuMnemonics) {
+            if ((wParam & 0xFFF0) == SC_KEYMENU) {
+                return 0;
+            }
         }
 
 #if defined(SC_SCREENSAVE) || defined(SC_MONITORPOWER)

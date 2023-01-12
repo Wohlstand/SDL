@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -115,7 +115,7 @@ static const SDL_RenderDriver *render_drivers[] = {
 #if SDL_VIDEO_RENDER_DIRECTFB
     &DirectFB_RenderDriver,
 #endif
-#if SDL_VIDEO_RENDER_PS2 && !SDL_RENDER_DISABLED
+#if SDL_VIDEO_RENDER_PS2
     &PS2_RenderDriver,
 #endif
 #if SDL_VIDEO_RENDER_PSP
@@ -2313,9 +2313,9 @@ static int UpdateLogicalSize(SDL_Renderer *renderer, SDL_bool flush_viewport_cmd
 
     if (renderer->integer_scale) {
         if (want_aspect > real_aspect) {
-            scale = (float)(w) / renderer->logical_w;
+            scale = (float)(w / renderer->logical_w); /* This an integer division! */
         } else {
-            scale = (float)(h) / renderer->logical_h;
+            scale = (float)(h / renderer->logical_h); /* This an integer division! */
         }
 
         if (scale < 1.0f) {
@@ -2488,7 +2488,7 @@ int SDL_RenderSetClipRect(SDL_Renderer *renderer, const SDL_Rect *rect)
     int retval;
     CHECK_RENDERER_MAGIC(renderer, -1)
 
-    if (rect) {
+    if (rect && rect->w > 0 && rect->h > 0) {
         renderer->clipping_enabled = SDL_TRUE;
         renderer->clip_rect.x = (double)rect->x * renderer->scale.x;
         renderer->clip_rect.y = (double)rect->y * renderer->scale.y;

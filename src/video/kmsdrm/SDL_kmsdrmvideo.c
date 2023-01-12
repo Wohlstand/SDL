@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -1492,7 +1492,7 @@ int KMSDRM_CreateWindow(_THIS, SDL_Window *window)
         /* Create the window surfaces with the size we have just chosen.
            Needs the window diverdata in place. */
         ret = KMSDRM_CreateSurfaces(_this, window);
-        if (ret == 0) {
+        if (ret != 0) {
             return SDL_SetError("Can't window GBM/EGL surfaces on window creation.");
         }
     } /* NON-Vulkan block ends. */

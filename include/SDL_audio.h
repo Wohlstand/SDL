@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -1008,12 +1008,12 @@ typedef struct _SDL_AudioStream SDL_AudioStream;
  * \sa SDL_AudioStreamClear
  * \sa SDL_FreeAudioStream
  */
-extern DECLSPEC SDL_AudioStream *SDLCALL SDL_NewAudioStream(SDL_AudioFormat src_format,
-                                                            Uint8 src_channels,
-                                                            int src_rate,
-                                                            SDL_AudioFormat dst_format,
-                                                            Uint8 dst_channels,
-                                                            int dst_rate);
+extern DECLSPEC SDL_AudioStream * SDLCALL SDL_NewAudioStream(const SDL_AudioFormat src_format,
+                                           const Uint8 src_channels,
+                                           const int src_rate,
+                                           const SDL_AudioFormat dst_format,
+                                           const Uint8 dst_channels,
+                                           const int dst_rate);
 
 /**
  * Add data to be converted/resampled to the stream.
