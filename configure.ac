@@ -1787,6 +1787,14 @@ dnl See if libdecor is available
                     else
                         EXTRA_LDFLAGS="$EXTRA_LDFLAGS $DECOR_LIBS"
                     fi
+
+                    saved_cflags=$CFLAGS
+                    CFLAGS="$CFLAGS $DECOR_CFLAGS"
+                    AC_CHECK_DECLS([libdecor_frame_get_min_content_size, libdecor_frame_get_max_content_size], [libdecor_get_min_max=yes], [ ], [[#include <libdecor.h>]])
+                    if test x$libdecor_get_min_max = xyes; then
+                        AC_DEFINE(SDL_HAVE_LIBDECOR_GET_MIN_MAX, 1, [ ])
+                    fi
+                    CFLAGS="$saved_cflags"
                 fi
             fi
         fi
@@ -3673,15 +3681,14 @@ CheckClockGettime()
 [AS_HELP_STRING([--enable-clock_gettime], [use clock_gettime() instead of gettimeofday() on UNIX [default=yes]])],
                   , enable_clock_gettime=yes)
     if test x$enable_clock_gettime = xyes; then
-        AC_CHECK_LIB(rt, clock_gettime, have_clock_gettime=yes)
+        AC_CHECK_LIB(c, clock_gettime, have_clock_gettime=yes)
         if test x$have_clock_gettime = xyes; then
-            AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [ ])
-            EXTRA_LDFLAGS="$EXTRA_LDFLAGS -lrt"
+           AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [ ])
         else
-            AC_CHECK_LIB(c, clock_gettime, have_clock_gettime=yes)
+            AC_CHECK_LIB(rt, clock_gettime, have_clock_gettime=yes)
             if test x$have_clock_gettime = xyes; then
-               AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [ ])
-               EXTRA_LDFLAGS="$EXTRA_LDFLAGS"
+                EXTRA_LDFLAGS="$EXTRA_LDFLAGS -lrt"
+                AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [ ])
             fi
         fi
     fi
