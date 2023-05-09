@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -83,12 +83,12 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
 
     y += lineHeight;
 
-    SDL_strlcpy(text, "Click on a mode to set it with SDL_SetWindowDisplayMode", sizeof text);
+    SDL_strlcpy(text, "Click on a mode to set it with SDL_SetWindowDisplayMode", sizeof(text));
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDLTest_DrawString(renderer, x, y, text);
     y += lineHeight;
 
-    SDL_strlcpy(text, "Press Ctrl+Enter to toggle SDL_WINDOW_FULLSCREEN", sizeof text);
+    SDL_strlcpy(text, "Press Ctrl+Enter to toggle SDL_WINDOW_FULLSCREEN", sizeof(text));
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDLTest_DrawString(renderer, x, y, text);
     y += lineHeight;
@@ -107,7 +107,7 @@ draw_modes_menu(SDL_Window *window, SDL_Renderer *renderer, SDL_Rect viewport)
             return;
         }
 
-        (void)SDL_snprintf(text, sizeof text, "%d: %dx%d@%dHz",
+        (void)SDL_snprintf(text, sizeof(text), "%d: %dx%d@%dHz",
                            i, mode.w, mode.h, mode.refresh_rate);
 
         /* Update column width */

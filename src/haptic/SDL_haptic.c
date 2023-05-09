@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -125,14 +125,14 @@ SDL_HapticOpen(int device_index)
     }
 
     /* Create the haptic device */
-    haptic = (SDL_Haptic *)SDL_malloc((sizeof *haptic));
+    haptic = (SDL_Haptic *)SDL_malloc(sizeof(*haptic));
     if (haptic == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
 
     /* Initialize the haptic device */
-    SDL_memset(haptic, 0, (sizeof *haptic));
+    SDL_memset(haptic, 0, sizeof(*haptic));
     haptic->rumble_id = -1;
     haptic->index = device_index;
     if (SDL_SYS_HapticOpen(haptic) < 0) {
@@ -233,12 +233,17 @@ int SDL_JoystickIsHaptic(SDL_Joystick *joystick)
 {
     int ret;
 
-    /* Must be a valid joystick */
-    if (!SDL_PrivateJoystickValid(joystick)) {
-        return -1;
-    }
+    SDL_LockJoysticks();
+    {
+        /* Must be a valid joystick */
+        if (!SDL_PrivateJoystickValid(joystick)) {
+            SDL_UnlockJoysticks();
+            return -1;
+        }
 
-    ret = SDL_SYS_JoystickIsHaptic(joystick);
+        ret = SDL_SYS_JoystickIsHaptic(joystick);
+    }
+    SDL_UnlockJoysticks();
 
     if (ret > 0) {
         return SDL_TRUE;
@@ -265,44 +270,53 @@ SDL_HapticOpenFromJoystick(SDL_Joystick *joystick)
         return NULL;
     }
 
-    /* Must be a valid joystick */
-    if (!SDL_PrivateJoystickValid(joystick)) {
-        SDL_SetError("Haptic: Joystick isn't valid.");
-        return NULL;
-    }
-
-    /* Joystick must be haptic */
-    if (SDL_SYS_JoystickIsHaptic(joystick) <= 0) {
-        SDL_SetError("Haptic: Joystick isn't a haptic device.");
-        return NULL;
-    }
-
-    hapticlist = SDL_haptics;
-    /* Check to see if joystick's haptic is already open */
-    while (hapticlist) {
-        if (SDL_SYS_JoystickSameHaptic(hapticlist, joystick)) {
-            haptic = hapticlist;
-            ++haptic->ref_count;
-            return haptic;
+    SDL_LockJoysticks();
+    {
+        /* Must be a valid joystick */
+        if (!SDL_PrivateJoystickValid(joystick)) {
+            SDL_SetError("Haptic: Joystick isn't valid.");
+            SDL_UnlockJoysticks();
+            return NULL;
         }
-        hapticlist = hapticlist->next;
-    }
 
-    /* Create the haptic device */
-    haptic = (SDL_Haptic *)SDL_malloc((sizeof *haptic));
-    if (haptic == NULL) {
-        SDL_OutOfMemory();
-        return NULL;
-    }
+        /* Joystick must be haptic */
+        if (SDL_SYS_JoystickIsHaptic(joystick) <= 0) {
+            SDL_SetError("Haptic: Joystick isn't a haptic device.");
+            SDL_UnlockJoysticks();
+            return NULL;
+        }
 
-    /* Initialize the haptic device */
-    SDL_memset(haptic, 0, sizeof(SDL_Haptic));
-    haptic->rumble_id = -1;
-    if (SDL_SYS_HapticOpenFromJoystick(haptic, joystick) < 0) {
-        SDL_SetError("Haptic: SDL_SYS_HapticOpenFromJoystick failed.");
-        SDL_free(haptic);
-        return NULL;
+        hapticlist = SDL_haptics;
+        /* Check to see if joystick's haptic is already open */
+        while (hapticlist) {
+            if (SDL_SYS_JoystickSameHaptic(hapticlist, joystick)) {
+                haptic = hapticlist;
+                ++haptic->ref_count;
+                SDL_UnlockJoysticks();
+                return haptic;
+            }
+            hapticlist = hapticlist->next;
+        }
+
+        /* Create the haptic device */
+        haptic = (SDL_Haptic *)SDL_malloc(sizeof(*haptic));
+        if (haptic == NULL) {
+            SDL_OutOfMemory();
+            SDL_UnlockJoysticks();
+            return NULL;
+        }
+
+        /* Initialize the haptic device */
+        SDL_memset(haptic, 0, sizeof(SDL_Haptic));
+        haptic->rumble_id = -1;
+        if (SDL_SYS_HapticOpenFromJoystick(haptic, joystick) < 0) {
+            SDL_SetError("Haptic: SDL_SYS_HapticOpenFromJoystick failed.");
+            SDL_free(haptic);
+            SDL_UnlockJoysticks();
+            return NULL;
+        }
     }
+    SDL_UnlockJoysticks();
 
     /* Add haptic to list */
     ++haptic->ref_count;
@@ -571,7 +585,7 @@ int SDL_HapticGetEffectStatus(SDL_Haptic *haptic, int effect)
         return -1;
     }
 
-    if ((haptic->supported & SDL_HAPTIC_STATUS) == 0) {
+    if (!(haptic->supported & SDL_HAPTIC_STATUS)) {
         return SDL_SetError("Haptic: Device does not support status queries.");
     }
 
@@ -590,7 +604,7 @@ int SDL_HapticSetGain(SDL_Haptic *haptic, int gain)
         return -1;
     }
 
-    if ((haptic->supported & SDL_HAPTIC_GAIN) == 0) {
+    if (!(haptic->supported & SDL_HAPTIC_GAIN)) {
         return SDL_SetError("Haptic: Device does not support setting gain.");
     }
 
@@ -632,7 +646,7 @@ int SDL_HapticSetAutocenter(SDL_Haptic *haptic, int autocenter)
         return -1;
     }
 
-    if ((haptic->supported & SDL_HAPTIC_AUTOCENTER) == 0) {
+    if (!(haptic->supported & SDL_HAPTIC_AUTOCENTER)) {
         return SDL_SetError("Haptic: Device does not support setting autocenter.");
     }
 
@@ -656,7 +670,7 @@ int SDL_HapticPause(SDL_Haptic *haptic)
         return -1;
     }
 
-    if ((haptic->supported & SDL_HAPTIC_PAUSE) == 0) {
+    if (!(haptic->supported & SDL_HAPTIC_PAUSE)) {
         return SDL_SetError("Haptic: Device does not support setting pausing.");
     }
 
@@ -672,7 +686,7 @@ int SDL_HapticUnpause(SDL_Haptic *haptic)
         return -1;
     }
 
-    if ((haptic->supported & SDL_HAPTIC_PAUSE) == 0) {
+    if (!(haptic->supported & SDL_HAPTIC_PAUSE)) {
         return 0; /* Not going to be paused, so we pretend it's unpaused. */
     }
 

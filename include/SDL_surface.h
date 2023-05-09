@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -683,7 +683,7 @@ extern DECLSPEC SDL_Surface *SDLCALL SDL_ConvertSurface
  * it might be easier to call but it doesn't have access to palette
  * information for the destination surface, in case that would be important.
  *
- * \param surface the existing SDL_Surface structure to convert
+ * \param src the existing SDL_Surface structure to convert
  * \param pixel_format the SDL_PixelFormatEnum that the new surface is
  *                     optimized for
  * \param flags the flags are unused and should be set to 0; this is a

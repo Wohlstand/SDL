@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "    MODE %d: failed to query (%s)\n", m, SDL_GetError());
             } else {
                 char prefix[64];
-                (void)SDL_snprintf(prefix, sizeof prefix, "    MODE %d", m);
+                (void)SDL_snprintf(prefix, sizeof(prefix), "    MODE %d", m);
                 print_mode(prefix, &mode);
             }
         }

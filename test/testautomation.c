@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -44,6 +44,9 @@ int main(int argc, char *argv[])
     if (state == NULL) {
         return 1;
     }
+
+    /* No need of windows (or update testautomation_mouse.c:mouse_getMouseFocus() */
+    state->num_windows = 0;
 
     /* Parse commandline */
     for (i = 1; i < argc;) {

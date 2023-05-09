@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -76,7 +76,7 @@ TestRealWorld(int init_sem)
     /* Create all the threads */
     for (i = 0; i < NUM_THREADS; ++i) {
         char name[64];
-        (void)SDL_snprintf(name, sizeof name, "Thread%u", (unsigned int)i);
+        (void)SDL_snprintf(name, sizeof(name), "Thread%u", (unsigned int)i);
         thread_states[i].number = i;
         thread_states[i].thread = SDL_CreateThread(ThreadFuncRealWorld, name, (void *)&thread_states[i]);
     }
@@ -198,7 +198,7 @@ TestOverheadContended(SDL_bool try_wait)
     /* Create multiple threads to starve the semaphore and cause contention */
     for (i = 0; i < NUM_THREADS; ++i) {
         char name[64];
-        (void)SDL_snprintf(name, sizeof name, "Thread%u", (unsigned int)i);
+        (void)SDL_snprintf(name, sizeof(name), "Thread%u", (unsigned int)i);
         thread_states[i].flag = try_wait;
         thread_states[i].thread = SDL_CreateThread(ThreadFuncOverheadContended, name, (void *)&thread_states[i]);
     }
@@ -210,6 +210,8 @@ TestOverheadContended(SDL_bool try_wait)
         }
         /* Make sure threads consumed everything */
         while (SDL_SemValue(sem)) {
+            /* Friendlier with cooperative threading models */
+            SDL_Delay(1);
         }
     }
     end_ticks = SDL_GetTicks();
@@ -229,17 +231,17 @@ TestOverheadContended(SDL_bool try_wait)
             duration, try_wait ? "where contended" : "timed out", content_count,
             loop_count, ((float)content_count * 100) / loop_count);
     /* Print how many semaphores where consumed per thread */
-    (void)SDL_snprintf(textBuffer, sizeof textBuffer, "{ ");
+    (void)SDL_snprintf(textBuffer, sizeof(textBuffer), "{ ");
     for (i = 0; i < NUM_THREADS; ++i) {
         if (i > 0) {
             len = SDL_strlen(textBuffer);
-            (void)SDL_snprintf(textBuffer + len, sizeof textBuffer - len, ", ");
+            (void)SDL_snprintf(textBuffer + len, sizeof(textBuffer) - len, ", ");
         }
         len = SDL_strlen(textBuffer);
-        (void)SDL_snprintf(textBuffer + len, sizeof textBuffer - len, "%d", thread_states[i].loop_count - thread_states[i].content_count);
+        (void)SDL_snprintf(textBuffer + len, sizeof(textBuffer) - len, "%d", thread_states[i].loop_count - thread_states[i].content_count);
     }
     len = SDL_strlen(textBuffer);
-    (void)SDL_snprintf(textBuffer + len, sizeof textBuffer - len, " }\n");
+    (void)SDL_snprintf(textBuffer + len, sizeof(textBuffer) - len, " }\n");
     SDL_Log("%s\n", textBuffer);
 
     SDL_DestroySemaphore(sem);

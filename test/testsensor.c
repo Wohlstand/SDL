@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -28,7 +28,7 @@ static const char *GetSensorTypeString(SDL_SensorType type)
     case SDL_SENSOR_GYRO:
         return "SDL_SENSOR_GYRO";
     default:
-        (void)SDL_snprintf(unknown_type, sizeof unknown_type, "UNKNOWN (%d)", type);
+        (void)SDL_snprintf(unknown_type, sizeof(unknown_type), "UNKNOWN (%d)", type);
         return unknown_type;
     }
 }

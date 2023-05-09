@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -116,8 +116,7 @@ int main(int argc, char *argv[])
                               width, height, 0);
 
     if (window == NULL) {
-        SDL_Log("Couldn't create window: %s\n",
-                SDL_GetError());
+        SDL_Log("Couldn't create window: %s\n", SDL_GetError());
         return SDL_FALSE;
     }
 

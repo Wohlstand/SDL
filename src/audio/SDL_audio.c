@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2022 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -163,6 +163,8 @@ static SDL_bool LoadLibSampleRate(void)
         SRC_converter = SRC_SINC_MEDIUM_QUALITY;
     } else if (*hint == '3' || SDL_strcasecmp(hint, "best") == 0) {
         SRC_converter = SRC_SINC_BEST_QUALITY;
+    } else if (*hint == '4' || SDL_strcasecmp(hint, "linear") == 0) {
+        SRC_converter = SRC_LINEAR;
     } else {
         return SDL_FALSE; /* treat it like "default", don't load anything. */
     }
@@ -304,14 +306,14 @@ static SDL_INLINE SDL_bool is_in_audio_device_thread(SDL_AudioDevice *device)
     return SDL_FALSE;
 }
 
-static void SDL_AudioLockDevice_Default(SDL_AudioDevice *device)
+static void SDL_AudioLockDevice_Default(SDL_AudioDevice *device) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang assumes recursive locks */
 {
     if (!is_in_audio_device_thread(device)) {
         SDL_LockMutex(device->mixer_lock);
     }
 }
 
-static void SDL_AudioUnlockDevice_Default(SDL_AudioDevice *device)
+static void SDL_AudioUnlockDevice_Default(SDL_AudioDevice *device) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang assumes recursive locks */
 {
     if (!is_in_audio_device_thread(device)) {
         SDL_UnlockMutex(device->mixer_lock);
@@ -1512,7 +1514,7 @@ static SDL_AudioDeviceID open_audio_device(const char *devname, int iscapture,
         const size_t stacksize = is_internal_thread ? 64 * 1024 : 0;
         char threadname[64];
 
-        (void)SDL_snprintf(threadname, sizeof threadname, "SDLAudio%c%" SDL_PRIu32, (iscapture) ? 'C' : 'P', device->id);
+        (void)SDL_snprintf(threadname, sizeof(threadname), "SDLAudio%c%" SDL_PRIu32, (iscapture) ? 'C' : 'P', device->id);
         device->thread = SDL_CreateThreadInternal(iscapture ? SDL_CaptureAudio : SDL_RunAudio, threadname, stacksize, device);
 
         if (device->thread == NULL) {
