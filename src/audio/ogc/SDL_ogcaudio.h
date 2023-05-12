@@ -38,8 +38,6 @@ struct SDL_PrivateAudioData {
     int     channel;
     /* Volume level */
     int     volume;
-    /* Flag */
-    int     flag;
     /* The raw allocated mixing buffer. */
     Uint8   *rawbuf;
     /* Individual mixing buffers. */

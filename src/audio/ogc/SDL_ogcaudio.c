@@ -38,8 +38,8 @@
 #include <gccore.h>
 #include <asndlib.h>
 
-#define SCE_AUDIO_SAMPLE_ALIGN(s)   (((s) + 63) & ~63)
-#define SCE_AUDIO_MAX_VOLUME    255
+#define OGC_AUDIO_SAMPLE_ALIGN(s)   (((s) + 63) & ~63)
+#define OGC_AUDIO_MAX_VOLUME    255
 
 /* The tag name used by VITA audio */
 #define OGCAUD_DRIVER_NAME     "ogc"
@@ -63,8 +63,8 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     if (this->hidden == NULL) {
         return SDL_OutOfMemory();
     }
+    SDL_zerop(this->hidden);
 
-    SDL_memset(this->hidden, 0, sizeof(*this->hidden));
     switch (SDL_AUDIO_BITSIZE(this->spec.format)) {
         case 8:
             if(SDL_AUDIO_ISUNSIGNED(this->spec.format)) {
@@ -98,7 +98,7 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
                     SDL_free(this->hidden);
                     this->hidden = NULL;
                 }
-                return SDL_SetError("Unsupported audio format");
+                return SDL_SetError("OGC: Unsupported audio format");
             }
             break;
         default:
@@ -106,7 +106,7 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
                 SDL_free(this->hidden);
                 this->hidden = NULL;
             }
-            return SDL_SetError("Unsupported audio format");
+            return SDL_SetError("OGC: Unsupported audio format");
     }
 
     if (this->spec.freq != 32000 && this->spec.freq != 48000) {
@@ -114,9 +114,9 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     }
 
     /* The sample count must be a multiple of 64. */
-    this->spec.samples = SCE_AUDIO_SAMPLE_ALIGN(this->spec.samples);
+    this->spec.samples = OGC_AUDIO_SAMPLE_ALIGN(this->spec.samples);
 
-    this->hidden->volume = SCE_AUDIO_MAX_VOLUME;
+    this->hidden->volume = OGC_AUDIO_MAX_VOLUME;
 
     /* Update the fragment size as size in bytes. */
     SDL_CalculateAudioSpec(&this->spec);
@@ -129,14 +129,13 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     if (this->hidden->rawbuf == NULL) {
         SDL_free(this->hidden);
         this->hidden = NULL;
-        return SDL_SetError("Couldn't allocate mixing buffer");
+        return SDL_SetError("OGC: Couldn't allocate mixing buffer");
     }
 
     this->hidden->channel = 0;
     this->hidden->first_time = 1;
 
     this->hidden->queue = LWP_TQUEUE_NULL;
-    this->hidden->flag = 0;
 
     LWP_InitQueue(&this->hidden->queue);
 
@@ -150,7 +149,7 @@ OGCAUD_OpenDevice(_THIS, const char *devname)
     this->hidden->cur_buffer = 0;
 
     ASND_Init();
-    ASND_ChangeVolumeVoice(this->hidden->channel, SCE_AUDIO_MAX_VOLUME, SCE_AUDIO_MAX_VOLUME);
+    ASND_ChangeVolumeVoice(this->hidden->channel, OGC_AUDIO_MAX_VOLUME, OGC_AUDIO_MAX_VOLUME);
     ASND_Pause(0);
 
     return 0;
@@ -163,7 +162,6 @@ static void ogc_play_callback(int voice)
         return;
     }
 
-    this->hidden->flag = 0;
     LWP_ThreadSignal(this->hidden->queue);
 }
 
@@ -189,7 +187,6 @@ static void OGCAUD_PlayDevice(_THIS)
         ASND_AddVoice(this->hidden->channel, mixbuf, this->spec.size);
     }
 
-    this->hidden->flag = 1;
     this->hidden->next_buffer = (this->hidden->next_buffer + 1) % NUM_BUFFERS;
 }
 
@@ -252,7 +249,7 @@ OGCAUD_Init(SDL_AudioDriverImpl * impl)
     impl->Deinitialize = OGCAUD_Deinitialize;
     impl->ThreadInit = OGCAUD_ThreadInit;
 
-    /* VITA audio device */
+    /* OGC audio device */
     impl->OnlyHasDefaultOutputDevice = SDL_TRUE;
     /*
     impl->HasCaptureSupport = SDL_TRUE;
