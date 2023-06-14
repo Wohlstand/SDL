@@ -1253,6 +1253,10 @@ static SDL_bool HIDAPI_DriverSwitch_InitDevice(SDL_HIDAPI_Device *device)
     /* Find out whether or not we can send output reports */
     ctx->m_bInputOnly = SDL_IsJoystickNintendoSwitchProInputOnly(device->vendor_id, device->product_id);
     if (!ctx->m_bInputOnly) {
+        /* Initialize rumble data, important for reading device info on the MOBAPAD M073  */
+        SetNeutralRumble(&ctx->m_RumblePacket.rumbleData[0]);
+        SetNeutralRumble(&ctx->m_RumblePacket.rumbleData[1]);
+
         if (!BReadDeviceInfo(ctx)) {
             SDL_LogDebug(SDL_LOG_CATEGORY_INPUT,
                          "HIDAPI_DriverSwitch_InitDevice(): Couldn't read device info");
@@ -1764,8 +1768,7 @@ static void HandleSimpleControllerState(SDL_Joystick *joystick, SDL_DriverSwitch
     ctx->m_lastSimpleState = *packet;
 }
 
-static void
-SendSensorUpdate(SDL_Joystick *joystick, SDL_DriverSwitch_Context *ctx, SDL_SensorType type, Uint64 timestamp_us, const Sint16 *values)
+static void SendSensorUpdate(SDL_Joystick *joystick, SDL_DriverSwitch_Context *ctx, SDL_SensorType type, Uint64 timestamp_us, const Sint16 *values)
 {
     float data[3];
 

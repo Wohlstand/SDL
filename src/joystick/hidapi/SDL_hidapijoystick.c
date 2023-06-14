@@ -247,6 +247,7 @@ static SDL_GameControllerType SDL_GetJoystickGameControllerProtocol(const char *
             0x24c6, /* PowerA */
             0x2c22, /* Qanba */
             0x2dc8, /* 8BitDo */
+            0x9886, /* ASTRO Gaming */
         };
 
         int i;
@@ -675,6 +676,22 @@ static void HIDAPI_UpdateJoystickSerial(SDL_HIDAPI_Device *device)
     }
 }
 
+static SDL_bool HIDAPI_SerialIsEmpty(SDL_HIDAPI_Device *device)
+{
+    SDL_bool all_zeroes = SDL_TRUE;
+
+    if (device->serial) {
+        const char *serial = device->serial;
+        for (serial = device->serial; *serial; ++serial) {
+            if (*serial != '0') {
+                all_zeroes = SDL_FALSE;
+                break;
+            }
+        }
+    }
+    return all_zeroes;
+}
+
 void HIDAPI_SetDeviceSerial(SDL_HIDAPI_Device *device, const char *serial)
 {
     if (serial && *serial && (!device->serial || SDL_strcmp(serial, device->serial) != 0)) {
@@ -1078,7 +1095,9 @@ static void HIDAPI_UpdateDeviceList(void)
                     device->seen = SDL_TRUE;
 
                     /* Check to see if the serial number is available now */
-                    HIDAPI_SetDeviceSerialW(device, info->serial_number);
+                    if(HIDAPI_SerialIsEmpty(device)) {
+                        HIDAPI_SetDeviceSerialW(device, info->serial_number);
+                    }
                 } else {
                     HIDAPI_AddDevice(info, 0, NULL);
                 }
@@ -1162,8 +1181,7 @@ static SDL_bool HIDAPI_IsEquivalentToDevice(Uint16 vendor_id, Uint16 product_id,
     return SDL_FALSE;
 }
 
-SDL_bool
-HIDAPI_IsDeviceTypePresent(SDL_GameControllerType type)
+SDL_bool HIDAPI_IsDeviceTypePresent(SDL_GameControllerType type)
 {
     SDL_HIDAPI_Device *device;
     SDL_bool result = SDL_FALSE;
@@ -1244,8 +1262,7 @@ SDL_bool HIDAPI_IsDevicePresent(Uint16 vendor_id, Uint16 product_id, Uint16 vers
     return result;
 }
 
-SDL_JoystickType
-HIDAPI_GetJoystickTypeFromGUID(SDL_JoystickGUID guid)
+SDL_JoystickType HIDAPI_GetJoystickTypeFromGUID(SDL_JoystickGUID guid)
 {
     SDL_HIDAPI_Device *device;
     SDL_JoystickType type = SDL_JOYSTICK_TYPE_UNKNOWN;
@@ -1262,8 +1279,7 @@ HIDAPI_GetJoystickTypeFromGUID(SDL_JoystickGUID guid)
     return type;
 }
 
-SDL_GameControllerType
-HIDAPI_GetGameControllerTypeFromGUID(SDL_JoystickGUID guid)
+SDL_GameControllerType HIDAPI_GetGameControllerTypeFromGUID(SDL_JoystickGUID guid)
 {
     SDL_HIDAPI_Device *device;
     SDL_GameControllerType type = SDL_CONTROLLER_TYPE_UNKNOWN;
