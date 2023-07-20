@@ -2350,6 +2350,9 @@ elseif(APPLE)
       list(APPEND EXTRA_LDFLAGS "-Wl,-weak_framework,CoreHaptics")
     endif()
   endif()
+  if(MACOSX_TIGER) # Fixes linking while having an extern variable at SDL_joystick.c (Details https://gcc.gnu.org/legacy-ml/gcc/2005-06/msg00185.html)
+    list(APPEND EXTRA_LDFLAGS "-Wl,-single_module")
+  endif()
 
   CheckPTHREAD()
 
