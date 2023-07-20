@@ -12,7 +12,7 @@ orig_CFLAGS="$CFLAGS"
 dnl Set various version strings - taken gratefully from the GTk sources
 # See docs/release_checklist.md
 SDL_MAJOR_VERSION=2
-SDL_MINOR_VERSION=27
+SDL_MINOR_VERSION=29
 SDL_MICRO_VERSION=0
 SDL_VERSION=$SDL_MAJOR_VERSION.$SDL_MINOR_VERSION.$SDL_MICRO_VERSION
 
@@ -1122,13 +1122,13 @@ CheckPulseAudio()
 [AS_HELP_STRING([--enable-pulseaudio], [use PulseAudio [default=yes]])],
                   , enable_pulseaudio=yes)
     if test x$enable_audio = xyes -a x$enable_pulseaudio = xyes; then
-        PKG_CHECK_MODULES([PULSEAUDIO], [libpulse-simple >= 0.9], audio_pulseaudio=yes, audio_pulseaudio=no)
+        PKG_CHECK_MODULES([PULSEAUDIO], [libpulse >= 0.9.15], audio_pulseaudio=yes, audio_pulseaudio=no)
 
         if test x$audio_pulseaudio = xyes; then
             AC_ARG_ENABLE(pulseaudio-shared,
 [AS_HELP_STRING([--enable-pulseaudio-shared], [dynamically load PulseAudio support [default=yes]])],
                           , enable_pulseaudio_shared=yes)
-            pulseaudio_lib=[`find_lib "libpulse-simple.so.*" "$PULSEAUDIO_LIBS" | sed 's/.*\/\(.*\)/\1/; q'`]
+            pulseaudio_lib=[`find_lib "libpulse.so.*" "$PULSEAUDIO_LIBS" | sed 's/.*\/\(.*\)/\1/; q'`]
 
             AC_DEFINE(SDL_AUDIO_DRIVER_PULSEAUDIO, 1, [ ])
             SOURCES="$SOURCES $srcdir/src/audio/pulseaudio/*.c"
@@ -1139,7 +1139,7 @@ CheckPulseAudio()
             fi
             if test x$have_loadso = xyes && \
                test x$enable_pulseaudio_shared = xyes && test x$pulseaudio_lib != x; then
-                echo "-- dynamic libpulse-simple -> $pulseaudio_lib"
+                echo "-- dynamic libpulse -> $pulseaudio_lib"
                 AC_DEFINE_UNQUOTED(SDL_AUDIO_DRIVER_PULSEAUDIO_DYNAMIC, "$pulseaudio_lib", [ ])
                 SUMMARY_audio="${SUMMARY_audio} pulse(dynamic)"
 
@@ -1558,26 +1558,6 @@ CheckNoStrictAliasing()
     fi
 }
 
-dnl See if GCC's -mpreferred-stack-boundary is supported.
-dnl  Reference: http://bugzilla.libsdl.org/show_bug.cgi?id=1296
-CheckStackBoundary()
-{
-    AC_MSG_CHECKING(for GCC -mpreferred-stack-boundary option)
-    have_gcc_preferred_stack_boundary=no
-
-    save_CFLAGS="$CFLAGS"
-    CFLAGS="$save_CFLAGS -mpreferred-stack-boundary=2"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-    int x = 0;
-    ]],[])], [have_gcc_preferred_stack_boundary=yes],[])
-    AC_MSG_RESULT($have_gcc_preferred_stack_boundary)
-    CFLAGS="$save_CFLAGS"
-
-    if test x$have_gcc_preferred_stack_boundary = xyes; then
-        EXTRA_CFLAGS="$EXTRA_CFLAGS -mpreferred-stack-boundary=2"
-    fi
-}
-
 dnl See if GCC's -Werror is supported.
 CheckWerror()
 {
@@ -1671,6 +1651,27 @@ dnl Haiku headers use multicharacter constants all over the place. Ignore these 
         if test x$need_gcc_Wno_multichar = xyes; then
             EXTRA_CFLAGS="$EXTRA_CFLAGS -Wno-multichar"
         fi
+    fi
+}
+
+dnl See if GCC's -Wunused-local-typedefs is supported and disable it
+dnl  because it triggers on gcc 4.8.4 for compile time asserts inside
+dnl  of functions.
+CheckUnusedLocalTypedefs()
+{
+    AC_MSG_CHECKING(for GCC -Wunused-local-typedefs option)
+    have_gcc_unused_local_typedefs=no
+
+    save_CFLAGS="$CFLAGS"
+    CFLAGS="$save_CFLAGS -Wunused-local-typedefs"
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+    int x = 0;
+    ]],[])], [have_gcc_unused_local_typedefs=yes],[])
+    AC_MSG_RESULT($have_gcc_unused_local_typedefs)
+    CFLAGS="$save_CFLAGS"
+
+    if test x$have_gcc_unused_local_typedefs = xyes; then
+        EXTRA_CFLAGS="$EXTRA_CFLAGS -Wno-unused-local-typedefs"
     fi
 }
 
@@ -3285,9 +3286,6 @@ CheckWINDOWS()
     ],[])
     AC_MSG_RESULT($have_wince)
 
-    # This fixes Windows stack alignment with newer GCC
-    CheckStackBoundary
-
     # headers needed elsewhere
     AC_CHECK_HEADER(tpcshrd.h,have_tpcshrd_h=yes)
     if test x$have_tpcshrd_h = xyes; then
@@ -3746,6 +3744,7 @@ CheckVirtualJoystick()
 
 dnl Do this on all platforms, before everything else (other things might want to override it).
 CheckWarnAll
+CheckUnusedLocalTypedefs
 CheckNoStrictAliasing
 
 dnl Do this for every platform, but for some it doesn't mean anything, but better to catch it here anyhow.

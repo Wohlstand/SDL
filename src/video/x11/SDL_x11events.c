@@ -36,6 +36,7 @@
 #include "../../events/SDL_events_c.h"
 #include "../../events/SDL_mouse_c.h"
 #include "../../events/SDL_touch_c.h"
+#include "../../SDL_utils_c.h"
 
 #include "SDL_hints.h"
 #include "SDL_timer.h"
@@ -739,10 +740,22 @@ static Bool isReparentNotify(Display *display, XEvent *ev, XPointer arg)
            ev->xreparent.serial == unmap->serial;
 }
 
+static SDL_bool IsHighLatin1(const char *string, int length)
+{
+	while (length-- > 0) {
+		Uint8 ch = (Uint8)*string;
+		if (ch >= 0x80) {
+			return SDL_TRUE;
+		}
+		++string;
+	}
+	return SDL_FALSE;
+}
+
 static int XLookupStringAsUTF8(XKeyEvent *event_struct, char *buffer_return, int bytes_buffer, KeySym *keysym_return, XComposeStatus *status_in_out)
 {
     int result = X11_XLookupString(event_struct, buffer_return, bytes_buffer, keysym_return, status_in_out);
-    if (result > 0) {
+    if (IsHighLatin1(buffer_return, result)) {
         char *utf8_text = SDL_iconv_string("UTF-8", "ISO-8859-1", buffer_return, result);
         if (utf8_text) {
             SDL_strlcpy(buffer_return, utf8_text, bytes_buffer);
@@ -855,6 +868,27 @@ static void X11_DispatchEvent(_THIS, XEvent *xevent)
     printf("type = %d display = %d window = %d\n",
            xevent->type, xevent->xany.display, xevent->xany.window);
 #endif
+
+#ifdef SDL_VIDEO_DRIVER_X11_XFIXES
+    if (SDL_X11_HAVE_XFIXES &&
+            xevent->type == X11_GetXFixesSelectionNotifyEvent()) {
+        XFixesSelectionNotifyEvent *ev = (XFixesSelectionNotifyEvent *) xevent;
+
+        /* !!! FIXME: cache atoms */
+        Atom XA_CLIPBOARD = X11_XInternAtom(display, "CLIPBOARD", 0);
+
+#ifdef DEBUG_XEVENTS
+        printf("window CLIPBOARD: XFixesSelectionNotify (selection = %s)\n",
+                X11_XGetAtomName(display, ev->selection));
+#endif
+
+        if (ev->selection == XA_PRIMARY ||
+                (XA_CLIPBOARD != None && ev->selection == XA_CLIPBOARD)) {
+            SDL_SendClipboardUpdate();
+            return;
+        }
+    }
+#endif /* SDL_VIDEO_DRIVER_X11_XFIXES */
 
     if ((videodata->clipboard_window != None) &&
         (videodata->clipboard_window == xevent->xany.window)) {

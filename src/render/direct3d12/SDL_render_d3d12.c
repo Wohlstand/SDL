@@ -276,8 +276,7 @@ UINT D3D12_Align(UINT location, UINT alignment)
     return (location + (alignment - 1)) & ~(alignment - 1);
 }
 
-Uint32
-D3D12_DXGIFormatToSDLPixelFormat(DXGI_FORMAT dxgiFormat)
+Uint32 D3D12_DXGIFormatToSDLPixelFormat(DXGI_FORMAT dxgiFormat)
 {
     switch (dxgiFormat) {
     case DXGI_FORMAT_B8G8R8A8_UNORM:
@@ -2610,6 +2609,7 @@ static int D3D12_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
         case SDL_RENDERCMD_SETCLIPRECT:
         {
             const SDL_Rect *rect = &cmd->data.cliprect.rect;
+            SDL_Rect viewport_cliprect;
             if (rendererData->currentCliprectEnabled != cmd->data.cliprect.enabled) {
                 rendererData->currentCliprectEnabled = cmd->data.cliprect.enabled;
                 rendererData->cliprectDirty = SDL_TRUE;
@@ -2617,7 +2617,11 @@ static int D3D12_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
             if (!rendererData->currentCliprectEnabled) {
                 /* If the clip rect is disabled, then the scissor rect should be the whole viewport,
                    since direct3d12 doesn't allow disabling the scissor rectangle */
-                rect = &rendererData->currentViewport;
+                viewport_cliprect.x = 0;
+                viewport_cliprect.y = 0;
+                viewport_cliprect.w = rendererData->currentViewport.w;
+                viewport_cliprect.h = rendererData->currentViewport.h;
+                rect = &viewport_cliprect;
             }
             if (SDL_memcmp(&rendererData->currentCliprect, rect, sizeof(*rect)) != 0) {
                 SDL_copyp(&rendererData->currentCliprect, rect);
@@ -2833,8 +2837,8 @@ static int D3D12_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect,
                       NULL,
                       (void **)&textureMemory);
     if (FAILED(result)) {
-        SAFE_RELEASE(readbackBuffer);
-        return WIN_SetErrorFromHRESULT(SDL_COMPOSE_ERROR("ID3D12Resource::Map [map staging texture]"), result);
+        WIN_SetErrorFromHRESULT(SDL_COMPOSE_ERROR("ID3D12Resource::Map [map staging texture]"), result);
+        goto done;
     }
 
     /* Copy the data into the desired buffer, converting pixels to the
@@ -2949,8 +2953,7 @@ static int D3D12_SetVSync(SDL_Renderer *renderer, const int vsync)
     return 0;
 }
 
-SDL_Renderer *
-D3D12_CreateRenderer(SDL_Window *window, Uint32 flags)
+SDL_Renderer *D3D12_CreateRenderer(SDL_Window *window, Uint32 flags)
 {
     SDL_Renderer *renderer;
     D3D12_RenderData *data;
