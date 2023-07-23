@@ -12,7 +12,7 @@ orig_CFLAGS="$CFLAGS"
 dnl Set various version strings - taken gratefully from the GTk sources
 # See docs/release_checklist.md
 SDL_MAJOR_VERSION=2
-SDL_MINOR_VERSION=27
+SDL_MINOR_VERSION=29
 SDL_MICRO_VERSION=0
 SDL_VERSION=$SDL_MAJOR_VERSION.$SDL_MINOR_VERSION.$SDL_MICRO_VERSION
 
@@ -1122,13 +1122,13 @@ CheckPulseAudio()
 [AS_HELP_STRING([--enable-pulseaudio], [use PulseAudio [default=yes]])],
                   , enable_pulseaudio=yes)
     if test x$enable_audio = xyes -a x$enable_pulseaudio = xyes; then
-        PKG_CHECK_MODULES([PULSEAUDIO], [libpulse-simple >= 0.9], audio_pulseaudio=yes, audio_pulseaudio=no)
+        PKG_CHECK_MODULES([PULSEAUDIO], [libpulse >= 0.9.15], audio_pulseaudio=yes, audio_pulseaudio=no)
 
         if test x$audio_pulseaudio = xyes; then
             AC_ARG_ENABLE(pulseaudio-shared,
 [AS_HELP_STRING([--enable-pulseaudio-shared], [dynamically load PulseAudio support [default=yes]])],
                           , enable_pulseaudio_shared=yes)
-            pulseaudio_lib=[`find_lib "libpulse-simple.so.*" "$PULSEAUDIO_LIBS" | sed 's/.*\/\(.*\)/\1/; q'`]
+            pulseaudio_lib=[`find_lib "libpulse.so.*" "$PULSEAUDIO_LIBS" | sed 's/.*\/\(.*\)/\1/; q'`]
 
             AC_DEFINE(SDL_AUDIO_DRIVER_PULSEAUDIO, 1, [ ])
             SOURCES="$SOURCES $srcdir/src/audio/pulseaudio/*.c"
@@ -1139,7 +1139,7 @@ CheckPulseAudio()
             fi
             if test x$have_loadso = xyes && \
                test x$enable_pulseaudio_shared = xyes && test x$pulseaudio_lib != x; then
-                echo "-- dynamic libpulse-simple -> $pulseaudio_lib"
+                echo "-- dynamic libpulse -> $pulseaudio_lib"
                 AC_DEFINE_UNQUOTED(SDL_AUDIO_DRIVER_PULSEAUDIO_DYNAMIC, "$pulseaudio_lib", [ ])
                 SUMMARY_audio="${SUMMARY_audio} pulse(dynamic)"
 
@@ -1555,26 +1555,6 @@ CheckNoStrictAliasing()
 
     if test x$have_gcc_no_strict_aliasing = xyes; then
         EXTRA_CFLAGS="$EXTRA_CFLAGS -fno-strict-aliasing"
-    fi
-}
-
-dnl See if GCC's -mpreferred-stack-boundary is supported.
-dnl  Reference: http://bugzilla.libsdl.org/show_bug.cgi?id=1296
-CheckStackBoundary()
-{
-    AC_MSG_CHECKING(for GCC -mpreferred-stack-boundary option)
-    have_gcc_preferred_stack_boundary=no
-
-    save_CFLAGS="$CFLAGS"
-    CFLAGS="$save_CFLAGS -mpreferred-stack-boundary=2"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-    int x = 0;
-    ]],[])], [have_gcc_preferred_stack_boundary=yes],[])
-    AC_MSG_RESULT($have_gcc_preferred_stack_boundary)
-    CFLAGS="$save_CFLAGS"
-
-    if test x$have_gcc_preferred_stack_boundary = xyes; then
-        EXTRA_CFLAGS="$EXTRA_CFLAGS -mpreferred-stack-boundary=2"
     fi
 }
 
@@ -3305,9 +3285,6 @@ CheckWINDOWS()
        ])
     ],[])
     AC_MSG_RESULT($have_wince)
-
-    # This fixes Windows stack alignment with newer GCC
-    CheckStackBoundary
 
     # headers needed elsewhere
     AC_CHECK_HEADER(tpcshrd.h,have_tpcshrd_h=yes)
