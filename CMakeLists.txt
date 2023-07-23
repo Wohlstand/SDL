@@ -2350,9 +2350,6 @@ elseif(APPLE)
       list(APPEND EXTRA_LDFLAGS "-Wl,-weak_framework,CoreHaptics")
     endif()
   endif()
-  if(MACOSX_TIGER) # Fixes linking while having an extern variable at SDL_joystick.c (Details https://gcc.gnu.org/legacy-ml/gcc/2005-06/msg00185.html)
-    list(APPEND EXTRA_LDFLAGS "-Wl,-single_module")
-  endif()
 
   CheckPTHREAD()
 
@@ -3373,6 +3370,7 @@ if(SDL_SHARED)
   add_library(SDL2::SDL2 ALIAS SDL2)
   set_target_properties(SDL2 PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
   set_target_properties(SDL2 PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS FALSE)
+  set(EXTRA_LDFLAGS_SHARED)
   if(NOT SDL_LIBC)
     if(SDL_CPU_X86)
       # FIXME: should be added for all architectures (missing symbols for ARM)
@@ -3388,6 +3386,9 @@ if(SDL_SHARED)
       MACOSX_RPATH 1
       SOVERSION 0
       OUTPUT_NAME "SDL2-${LT_RELEASE}")
+    if(MACOSX_TIGER) # Fixes linking while having an extern variable at SDL_joystick.c (Details https://gcc.gnu.org/legacy-ml/gcc/2005-06/msg00185.html)
+      list(APPEND EXTRA_LDFLAGS_SHARED "-Wl,-single_module")
+    endif()
   elseif(UNIX AND NOT ANDROID)
     set_target_properties(SDL2 PROPERTIES
       VERSION ${LT_VERSION}
@@ -3415,7 +3416,7 @@ if(SDL_SHARED)
     set_property(TARGET SDL2 APPEND_STRING PROPERTY STATIC_LIBRARY_FLAGS " /NODEFAULTLIB")
   endif()
   # FIXME: if CMAKE_VERSION >= 3.13, use target_link_options for EXTRA_LDFLAGS
-  target_link_libraries(SDL2 PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS} ${EXTRA_LDFLAGS_BUILD} ${CMAKE_DEPENDS})
+  target_link_libraries(SDL2 PRIVATE ${EXTRA_LIBS} ${EXTRA_LDFLAGS} ${EXTRA_LDFLAGS_SHARED} ${EXTRA_LDFLAGS_BUILD} ${CMAKE_DEPENDS})
   target_include_directories(SDL2 PUBLIC
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include>"
       "$<BUILD_INTERFACE:${SDL2_BINARY_DIR}/include/SDL2>"
@@ -3438,6 +3439,7 @@ if(SDL_SHARED)
   set_property(TARGET SDL2 PROPERTY INTERFACE_SDL2_SHARED TRUE)
   set_property(TARGET SDL2 APPEND PROPERTY COMPATIBLE_INTERFACE_STRING "SDL_VERSION")
   set_property(TARGET SDL2 PROPERTY INTERFACE_SDL_VERSION "SDL2")
+  unset(EXTRA_LDFLAGS_SHARED)
 endif()
 
 if(SDL_STATIC)
