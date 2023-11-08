@@ -2346,7 +2346,8 @@ SDL_bool SDL_IsJoystickXboxSeriesX(Uint16 vendor_id, Uint16 product_id)
         }
     }
     if (vendor_id == USB_VENDOR_8BITDO) {
-        if (product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER) {
+        if (product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER1 ||
+            product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER2) {
             return SDL_TRUE;
         }
     }
