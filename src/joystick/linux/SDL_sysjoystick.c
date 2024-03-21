@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -146,8 +146,8 @@ typedef enum
 static EnumerationMethod enumeration_method = ENUMERATION_UNSET;
 
 static SDL_bool IsJoystickJSNode(const char *node);
-static int MaybeAddDevice(const char *path);
-static int MaybeRemoveDevice(const char *path);
+static void MaybeAddDevice(const char *path);
+static void MaybeRemoveDevice(const char *path);
 
 /* A linked list of available joysticks */
 typedef struct SDL_joylist_item
@@ -157,6 +157,7 @@ typedef struct SDL_joylist_item
     char *name; /* "SideWinder 3D Pro" or whatever */
     SDL_JoystickGUID guid;
     dev_t devnum;
+    int steam_virtual_gamepad_slot;
     struct joystick_hwdata *hwdata;
     struct SDL_joylist_item *next;
 
@@ -177,10 +178,10 @@ typedef struct SDL_sensorlist_item
 } SDL_sensorlist_item;
 
 static SDL_bool SDL_classic_joysticks = SDL_FALSE;
-static SDL_joylist_item *SDL_joylist = NULL;
-static SDL_joylist_item *SDL_joylist_tail = NULL;
-static int numjoysticks = 0;
-static SDL_sensorlist_item *SDL_sensorlist = NULL;
+static SDL_joylist_item *SDL_joylist SDL_GUARDED_BY(SDL_joystick_lock) = NULL;
+static SDL_joylist_item *SDL_joylist_tail SDL_GUARDED_BY(SDL_joystick_lock) = NULL;
+static int numjoysticks SDL_GUARDED_BY(SDL_joystick_lock) = 0;
+static SDL_sensorlist_item *SDL_sensorlist SDL_GUARDED_BY(SDL_joystick_lock) = NULL;
 static int inotify_fd = -1;
 
 static Uint32 last_joy_detect_time;
@@ -220,6 +221,23 @@ static SDL_bool IsVirtualJoystick(Uint16 vendor, Uint16 product, Uint16 version,
 }
 #endif /* SDL_JOYSTICK_HIDAPI */
 
+static SDL_bool GetSteamVirtualGamepadSlot(int fd, int *slot)
+{
+    char name[128];
+
+    if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) > 0) {
+        const char *digits = SDL_strstr(name, "pad ");
+        if (digits) {
+            digits += 4;
+            if (SDL_isdigit(*digits)) {
+                *slot = SDL_atoi(digits);
+                return SDL_TRUE;
+            }
+        }
+    }
+    return SDL_FALSE;
+}
+
 static int GuessDeviceClass(int fd)
 {
     unsigned long evbit[NBITS(EV_MAX)] = { 0 };
@@ -255,23 +273,25 @@ static int GuessIsSensor(int fd)
     return 0;
 }
 
-static int IsJoystick(const char *path, int fd, char **name_return, SDL_JoystickGUID *guid)
+static int IsJoystick(const char *path, int fd, char **name_return, Uint16 *vendor_return, Uint16 *product_return, SDL_JoystickGUID *guid)
 {
     struct input_id inpid;
     char *name;
     char product_string[128];
+    int class = 0;
 
-    if (ioctl(fd, JSIOCGNAME(sizeof(product_string)), product_string) >= 0) {
-        SDL_zero(inpid);
-#if SDL_USE_LIBUDEV
-        SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version);
+    SDL_zero(inpid);
+#ifdef SDL_USE_LIBUDEV
+    SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version, &class);
 #endif
-    } else {
+    if (ioctl(fd, JSIOCGNAME(sizeof(product_string)), product_string) <= 0) {
         /* When udev is enabled we only get joystick devices here, so there's no need to test them */
-        if (enumeration_method != ENUMERATION_LIBUDEV && !GuessIsJoystick(fd)) {
+        if (enumeration_method != ENUMERATION_LIBUDEV &&
+            !(class & SDL_UDEV_DEVICE_JOYSTICK) && ( class || !GuessIsJoystick(fd))) {
             return 0;
         }
 
+        /* Could have vendor and product already from udev, but should agree with evdev */
         if (ioctl(fd, EVIOCGID, &inpid) < 0) {
             return 0;
         }
@@ -282,7 +302,7 @@ static int IsJoystick(const char *path, int fd, char **name_return, SDL_Joystick
     }
 
     name = SDL_CreateJoystickName(inpid.vendor, inpid.product, NULL, product_string);
-    if (name == NULL) {
+    if (!name) {
         return 0;
     }
 
@@ -301,13 +321,15 @@ static int IsJoystick(const char *path, int fd, char **name_return, SDL_Joystick
     SDL_Log("Joystick: %s, bustype = %d, vendor = 0x%.4x, product = 0x%.4x, version = %d\n", name, inpid.bustype, inpid.vendor, inpid.product, inpid.version);
 #endif
 
-    *guid = SDL_CreateJoystickGUID(inpid.bustype, inpid.vendor, inpid.product, inpid.version, name, 0, 0);
+    *guid = SDL_CreateJoystickGUID(inpid.bustype, inpid.vendor, inpid.product, inpid.version, NULL, product_string, 0, 0);
 
     if (SDL_ShouldIgnoreJoystick(name, *guid)) {
         SDL_free(name);
         return 0;
     }
     *name_return = name;
+    *vendor_return = inpid.vendor;
+    *product_return = inpid.product;
     return 1;
 }
 
@@ -328,10 +350,10 @@ static int IsSensor(const char *path, int fd)
     return GuessIsSensor(fd);
 }
 
-#if SDL_USE_LIBUDEV
+#ifdef SDL_USE_LIBUDEV
 static void joystick_udev_callback(SDL_UDEV_deviceevent udev_type, int udev_class, const char *devpath)
 {
-    if (devpath == NULL) {
+    if (!devpath) {
         return;
     }
 
@@ -380,67 +402,75 @@ static void FreeSensorlistItem(SDL_sensorlist_item *item)
     SDL_free(item);
 }
 
-static int MaybeAddDevice(const char *path)
+static void MaybeAddDevice(const char *path)
 {
     struct stat sb;
     int fd = -1;
     char *name = NULL;
+    Uint16 vendor, product;
     SDL_JoystickGUID guid;
     SDL_joylist_item *item;
     SDL_sensorlist_item *item_sensor;
 
-    if (path == NULL) {
-        return -1;
+    if (!path) {
+        return;
     }
 
     if (stat(path, &sb) == -1) {
-        return -1;
+        return;
     }
 
+    SDL_LockJoysticks();
+
     /* Check to make sure it's not already in list. */
-    for (item = SDL_joylist; item != NULL; item = item->next) {
+    for (item = SDL_joylist; item; item = item->next) {
         if (sb.st_rdev == item->devnum) {
-            return -1; /* already have this one */
+            goto done; /* already have this one */
         }
     }
-    for (item_sensor = SDL_sensorlist; item_sensor != NULL; item_sensor = item_sensor->next) {
+    for (item_sensor = SDL_sensorlist; item_sensor; item_sensor = item_sensor->next) {
         if (sb.st_rdev == item_sensor->devnum) {
-            return -1; /* already have this one */
+            goto done; /* already have this one */
         }
     }
 
     fd = open(path, O_RDONLY | O_CLOEXEC, 0);
     if (fd < 0) {
-        return -1;
+        goto done;
     }
 
 #ifdef DEBUG_INPUT_EVENTS
     SDL_Log("Checking %s\n", path);
 #endif
 
-    if (IsJoystick(path, fd, &name, &guid)) {
+    if (IsJoystick(path, fd, &name, &vendor, &product, &guid)) {
 #ifdef DEBUG_INPUT_EVENTS
         SDL_Log("found joystick: %s\n", path);
 #endif
-        close(fd);
         item = (SDL_joylist_item *)SDL_calloc(1, sizeof(SDL_joylist_item));
-        if (item == NULL) {
+        if (!item) {
             SDL_free(name);
-            return -1;
+            goto done;
         }
 
         item->devnum = sb.st_rdev;
+        item->steam_virtual_gamepad_slot = -1;
         item->path = SDL_strdup(path);
         item->name = name;
         item->guid = guid;
 
-        if ((item->path == NULL) || (item->name == NULL)) {
+        if (vendor == USB_VENDOR_VALVE &&
+            product == USB_PRODUCT_STEAM_VIRTUAL_GAMEPAD) {
+            GetSteamVirtualGamepadSlot(fd, &item->steam_virtual_gamepad_slot);
+        }
+
+        if ((!item->path) || (!item->name)) {
             FreeJoylistItem(item);
-            return -1;
+            goto done;
         }
 
         item->device_instance = SDL_GetNextJoystickInstanceID();
-        if (SDL_joylist_tail == NULL) {
+        if (!SDL_joylist_tail) {
             SDL_joylist = SDL_joylist_tail = item;
         } else {
             SDL_joylist_tail->next = item;
@@ -451,42 +481,46 @@ static int MaybeAddDevice(const char *path)
         ++numjoysticks;
 
         SDL_PrivateJoystickAdded(item->device_instance);
-        return numjoysticks;
+        goto done;
     }
 
     if (IsSensor(path, fd)) {
 #ifdef DEBUG_INPUT_EVENTS
         SDL_Log("found sensor: %s\n", path);
 #endif
-        close(fd);
         item_sensor = (SDL_sensorlist_item *)SDL_calloc(1, sizeof(SDL_sensorlist_item));
-        if (item_sensor == NULL) {
-            return -1;
+        if (!item_sensor) {
+            goto done;
         }
         item_sensor->devnum = sb.st_rdev;
         item_sensor->path = SDL_strdup(path);
 
-        if (item_sensor->path == NULL) {
+        if (!item_sensor->path) {
             FreeSensorlistItem(item_sensor);
-            return -1;
+            goto done;
         }
 
         item_sensor->next = SDL_sensorlist;
         SDL_sensorlist = item_sensor;
-        return -1;
+        goto done;
     }
 
-    close(fd);
-    return -1;
+done:
+    if (fd >= 0) {
+        close(fd);
+    }
+    SDL_UnlockJoysticks();
 }
 
 static void RemoveJoylistItem(SDL_joylist_item *item, SDL_joylist_item *prev)
 {
+    SDL_AssertJoysticksLocked();
+
     if (item->hwdata) {
         item->hwdata->item = NULL;
     }
 
-    if (prev != NULL) {
+    if (prev) {
         prev->next = item->next;
     } else {
         SDL_assert(SDL_joylist == item);
@@ -506,11 +540,13 @@ static void RemoveJoylistItem(SDL_joylist_item *item, SDL_joylist_item *prev)
 
 static void RemoveSensorlistItem(SDL_sensorlist_item *item, SDL_sensorlist_item *prev)
 {
+    SDL_AssertJoysticksLocked();
+
     if (item->hwdata) {
         item->hwdata->item_sensor = NULL;
     }
 
-    if (prev != NULL) {
+    if (prev) {
         prev->next = item->next;
     } else {
         SDL_assert(SDL_sensorlist == item);
@@ -522,50 +558,53 @@ static void RemoveSensorlistItem(SDL_sensorlist_item *item, SDL_sensorlist_item 
     FreeSensorlistItem(item);
 }
 
-static int MaybeRemoveDevice(const char *path)
+static void MaybeRemoveDevice(const char *path)
 {
     SDL_joylist_item *item;
     SDL_joylist_item *prev = NULL;
     SDL_sensorlist_item *item_sensor;
     SDL_sensorlist_item *prev_sensor = NULL;
 
-    if (path == NULL) {
-        return -1;
+    if (!path) {
+        return;
     }
 
-    for (item = SDL_joylist; item != NULL; item = item->next) {
+    SDL_LockJoysticks();
+    for (item = SDL_joylist; item; item = item->next) {
         /* found it, remove it. */
         if (SDL_strcmp(path, item->path) == 0) {
-            const int retval = item->device_instance;
             RemoveJoylistItem(item, prev);
-            return retval;
+            goto done;
         }
         prev = item;
     }
-    for (item_sensor = SDL_sensorlist; item_sensor != NULL; item_sensor = item_sensor->next) {
+    for (item_sensor = SDL_sensorlist; item_sensor; item_sensor = item_sensor->next) {
         /* found it, remove it. */
         if (SDL_strcmp(path, item_sensor->path) == 0) {
             RemoveSensorlistItem(item_sensor, prev_sensor);
-            return -1;
+            goto done;
         }
         prev_sensor = item_sensor;
     }
-
-    return -1;
+done:
+    SDL_UnlockJoysticks();
 }
 
 static void HandlePendingRemovals(void)
 {
     SDL_joylist_item *prev = NULL;
-    SDL_joylist_item *item = SDL_joylist;
+    SDL_joylist_item *item = NULL;
     SDL_sensorlist_item *prev_sensor = NULL;
-    SDL_sensorlist_item *item_sensor = SDL_sensorlist;
+    SDL_sensorlist_item *item_sensor = NULL;
 
-    while (item != NULL) {
+    SDL_AssertJoysticksLocked();
+
+    item = SDL_joylist;
+    while (item) {
         if (item->hwdata && item->hwdata->gone) {
             RemoveJoylistItem(item, prev);
 
-            if (prev != NULL) {
+            if (prev) {
                 item = prev->next;
             } else {
                 item = SDL_joylist;
@@ -576,11 +615,12 @@ static void HandlePendingRemovals(void)
         }
     }
 
-    while (item_sensor != NULL) {
+    item_sensor = SDL_sensorlist;
+    while (item_sensor) {
         if (item_sensor->hwdata && item_sensor->hwdata->sensor_gone) {
             RemoveSensorlistItem(item_sensor, prev_sensor);
 
-            if (prev_sensor != NULL) {
+            if (prev_sensor) {
                 item_sensor = prev_sensor->next;
             } else {
                 item_sensor = SDL_sensorlist;
@@ -597,7 +637,7 @@ static SDL_bool SteamControllerConnectedCallback(const char *name, SDL_JoystickG
     SDL_joylist_item *item;
 
     item = (SDL_joylist_item *)SDL_calloc(1, sizeof(SDL_joylist_item));
-    if (item == NULL) {
+    if (!item) {
         return SDL_FALSE;
     }
 
@@ -606,13 +646,14 @@ static SDL_bool SteamControllerConnectedCallback(const char *name, SDL_JoystickG
     item->guid = guid;
     item->m_bSteamController = SDL_TRUE;
 
-    if ((item->path == NULL) || (item->name == NULL)) {
+    if ((!item->path) || (!item->name)) {
         FreeJoylistItem(item);
         return SDL_FALSE;
     }
 
     *device_instance = item->device_instance = SDL_GetNextJoystickInstanceID();
-    if (SDL_joylist_tail == NULL) {
+    SDL_LockJoysticks();
+    if (!SDL_joylist_tail) {
         SDL_joylist = SDL_joylist_tail = item;
     } else {
         SDL_joylist_tail->next = item;
@@ -623,6 +664,7 @@ static SDL_bool SteamControllerConnectedCallback(const char *name, SDL_JoystickG
     ++numjoysticks;
 
     SDL_PrivateJoystickAdded(item->device_instance);
+    SDL_UnlockJoysticks();
 
     return SDL_TRUE;
 }
@@ -632,14 +674,16 @@ static void SteamControllerDisconnectedCallback(int device_instance)
     SDL_joylist_item *item;
     SDL_joylist_item *prev = NULL;
 
-    for (item = SDL_joylist; item != NULL; item = item->next) {
+    SDL_LockJoysticks();
+    for (item = SDL_joylist; item; item = item->next) {
         /* found it, remove it. */
         if (item->device_instance == device_instance) {
             RemoveJoylistItem(item, prev);
-            return;
+            break;
         }
         prev = item;
     }
+    SDL_UnlockJoysticks();
 }
 
 static int StrHasPrefix(const char *string, const char *prefix)
@@ -813,6 +857,89 @@ static int sort_entries(const void *_a, const void *_b)
     return numA - numB;
 }
 
+typedef struct
+{
+    char *path;
+    int slot;
+} VirtualGamepadEntry;
+
+static int SDLCALL sort_virtual_gamepads(const void *_a, const void *_b)
+{
+    const VirtualGamepadEntry *a = (const VirtualGamepadEntry *)_a;
+    const VirtualGamepadEntry *b = (const VirtualGamepadEntry *)_b;
+    return a->slot - b->slot;
+}
+
+static void LINUX_ScanSteamVirtualGamepads(void)
+{
+    int i, count;
+    int fd;
+    struct dirent **entries = NULL;
+    char path[PATH_MAX];
+    struct input_id inpid;
+    int num_virtual_gamepads = 0;
+    int virtual_gamepad_slot;
+    VirtualGamepadEntry *virtual_gamepads = NULL;
+
+    count = scandir("/dev/input", &entries, filter_entries, NULL);
+    for (i = 0; i < count; ++i) {
+        (void)SDL_snprintf(path, SDL_arraysize(path), "/dev/input/%s", entries[i]->d_name);
+
+        fd = open(path, O_RDONLY | O_CLOEXEC, 0);
+        if (fd >= 0) {
+            if (ioctl(fd, EVIOCGID, &inpid) == 0 &&
+                inpid.vendor == USB_VENDOR_VALVE &&
+                inpid.product == USB_PRODUCT_STEAM_VIRTUAL_GAMEPAD &&
+                GetSteamVirtualGamepadSlot(fd, &virtual_gamepad_slot)) {
+                VirtualGamepadEntry *new_virtual_gamepads = (VirtualGamepadEntry *)SDL_realloc(virtual_gamepads, (num_virtual_gamepads + 1) * sizeof(*virtual_gamepads));
+                if (new_virtual_gamepads) {
+                    VirtualGamepadEntry *entry = &new_virtual_gamepads[num_virtual_gamepads];
+                    entry->path = SDL_strdup(path);
+                    entry->slot = virtual_gamepad_slot;
+                    if (entry->path) {
+                        virtual_gamepads = new_virtual_gamepads;
+                        ++num_virtual_gamepads;
+                    } else {
+                        SDL_free(entry->path);
+                        SDL_free(new_virtual_gamepads);
+                    }
+                }
+            }
+            close(fd);
+        }
+        free(entries[i]); /* This should NOT be SDL_free() */
+    }
+    free(entries); /* This should NOT be SDL_free() */
+
+    if (num_virtual_gamepads > 1) {
+        SDL_qsort(virtual_gamepads, num_virtual_gamepads, sizeof(*virtual_gamepads), sort_virtual_gamepads);
+    }
+    for (i = 0; i < num_virtual_gamepads; ++i) {
+        MaybeAddDevice(virtual_gamepads[i].path);
+        SDL_free(virtual_gamepads[i].path);
+    }
+    SDL_free(virtual_gamepads);
+}
+
+static void LINUX_ScanInputDevices(void)
+{
+    int i, count;
+    struct dirent **entries = NULL;
+    char path[PATH_MAX];
+
+    count = scandir("/dev/input", &entries, filter_entries, NULL);
+    if (count > 1) {
+        SDL_qsort(entries, count, sizeof(*entries), sort_entries);
+    }
+    for (i = 0; i < count; ++i) {
+        (void)SDL_snprintf(path, SDL_arraysize(path), "/dev/input/%s", entries[i]->d_name);
+        MaybeAddDevice(path);
+
+        free(entries[i]); /* This should NOT be SDL_free() */
+    }
+    free(entries); /* This should NOT be SDL_free() */
+}
+
 static void LINUX_FallbackJoystickDetect(void)
 {
     const Uint32 SDL_JOY_DETECT_INTERVAL_MS = 3000; /* Update every 3 seconds */
@@ -823,21 +950,10 @@ static void LINUX_FallbackJoystickDetect(void)
 
         /* Opening input devices can generate synchronous device I/O, so avoid it if we can */
         if (stat("/dev/input", &sb) == 0 && sb.st_mtime != last_input_dir_mtime) {
-            int i, count;
-            struct dirent **entries = NULL;
-            char path[PATH_MAX];
+            /* Look for Steam virtual gamepads first, and sort by Steam controller slot */
+            LINUX_ScanSteamVirtualGamepads();
 
-            count = scandir("/dev/input", &entries, filter_entries, NULL);
-            if (count > 1) {
-                qsort(entries, count, sizeof(*entries), sort_entries);
-            }
-            for (i = 0; i < count; ++i) {
-                (void)SDL_snprintf(path, SDL_arraysize(path), "/dev/input/%s", entries[i]->d_name);
-                MaybeAddDevice(path);
-
-                free(entries[i]); /* This should NOT be SDL_free() */
-            }
-            free(entries); /* This should NOT be SDL_free() */
+            LINUX_ScanInputDevices();
 
             last_input_dir_mtime = sb.st_mtime;
         }
@@ -848,7 +964,7 @@ static void LINUX_FallbackJoystickDetect(void)
 
 static void LINUX_JoystickDetect(void)
 {
-#if SDL_USE_LIBUDEV
+#ifdef SDL_USE_LIBUDEV
     if (enumeration_method == ENUMERATION_LIBUDEV) {
         SDL_UDEV_Poll();
     } else
@@ -876,13 +992,13 @@ static int LINUX_JoystickInit(void)
     enumeration_method = ENUMERATION_UNSET;
 
     /* First see if the user specified one or more joysticks to use */
-    if (devices != NULL) {
+    if (devices) {
         char *envcopy, *envpath, *delim;
         envcopy = SDL_strdup(devices);
         envpath = envcopy;
-        while (envpath != NULL) {
+        while (envpath) {
             delim = SDL_strchr(envpath, ':');
-            if (delim != NULL) {
+            if (delim) {
                 *delim++ = '\0';
             }
             MaybeAddDevice(envpath);
@@ -901,7 +1017,7 @@ static int LINUX_JoystickInit(void)
     /* Manually scan first, since we sort by device number and udev doesn't */
     LINUX_JoystickDetect();
 
-#if SDL_USE_LIBUDEV
+#ifdef SDL_USE_LIBUDEV
     if (enumeration_method == ENUMERATION_UNSET) {
         if (SDL_GetHintBoolean("SDL_JOYSTICK_DISABLE_UDEV", SDL_FALSE)) {
             SDL_LogDebug(SDL_LOG_CATEGORY_INPUT,
@@ -965,17 +1081,22 @@ static int LINUX_JoystickInit(void)
 
 static int LINUX_JoystickGetCount(void)
 {
+    SDL_AssertJoysticksLocked();
+
     return numjoysticks;
 }
 
 static SDL_joylist_item *JoystickByDevIndex(int device_index)
 {
-    SDL_joylist_item *item = SDL_joylist;
+    SDL_joylist_item *item;
+
+    SDL_AssertJoysticksLocked();
 
     if ((device_index < 0) || (device_index >= numjoysticks)) {
         return NULL;
     }
 
+    item = SDL_joylist;
     while (device_index > 0) {
         SDL_assert(item != NULL);
         device_index--;
@@ -993,6 +1114,11 @@ static const char *LINUX_JoystickGetDeviceName(int device_index)
 static const char *LINUX_JoystickGetDevicePath(int device_index)
 {
     return JoystickByDevIndex(device_index)->path;
+}
+
+static int LINUX_JoystickGetDeviceSteamVirtualGamepadSlot(int device_index)
+{
+    return JoystickByDevIndex(device_index)->steam_virtual_gamepad_slot;
 }
 
 static int LINUX_JoystickGetDevicePlayerIndex(int device_index)
@@ -1024,7 +1150,7 @@ static int allocate_hatdata(SDL_Joystick *joystick)
     joystick->hwdata->hats =
         (struct hwdata_hat *)SDL_malloc(joystick->nhats *
                                         sizeof(struct hwdata_hat));
-    if (joystick->hwdata->hats == NULL) {
+    if (!joystick->hwdata->hats) {
         return -1;
     }
     for (i = 0; i < joystick->nhats; ++i) {
@@ -1043,7 +1169,7 @@ static int allocate_balldata(SDL_Joystick *joystick)
     joystick->hwdata->balls =
         (struct hwdata_ball *)SDL_malloc(joystick->nballs *
                                          sizeof(struct hwdata_ball));
-    if (joystick->hwdata->balls == NULL) {
+    if (!joystick->hwdata->balls) {
         return -1;
     }
     for (i = 0; i < joystick->nballs; ++i) {
@@ -1062,7 +1188,7 @@ static SDL_bool GuessIfAxesAreDigitalHat(struct input_absinfo *absinfo_x, struct
      * other continuous analog axis, so we have to guess. */
 
     /* If both axes are missing, they're not anything. */
-    if (absinfo_x == NULL && absinfo_y == NULL) {
+    if (!absinfo_x && !absinfo_y) {
         return SDL_FALSE;
     }
 
@@ -1072,12 +1198,12 @@ static SDL_bool GuessIfAxesAreDigitalHat(struct input_absinfo *absinfo_x, struct
     }
 
     /* If both axes have ranges constrained between -1 and 1, they're definitely digital. */
-    if ((absinfo_x == NULL || (absinfo_x->minimum == -1 && absinfo_x->maximum == 1)) && (absinfo_y == NULL || (absinfo_y->minimum == -1 && absinfo_y->maximum == 1))) {
+    if ((!absinfo_x || (absinfo_x->minimum == -1 && absinfo_x->maximum == 1)) && (!absinfo_y || (absinfo_y->minimum == -1 && absinfo_y->maximum == 1))) {
         return SDL_TRUE;
     }
 
     /* If both axes lack fuzz, flat, and resolution values, they're probably digital. */
-    if ((absinfo_x == NULL || (!absinfo_x->fuzz && !absinfo_x->flat && !absinfo_x->resolution)) && (absinfo_y == NULL || (!absinfo_y->fuzz && !absinfo_y->flat && !absinfo_y->resolution))) {
+    if ((!absinfo_x || (!absinfo_x->fuzz && !absinfo_x->flat && !absinfo_x->resolution)) && (!absinfo_y || (!absinfo_y->fuzz && !absinfo_y->flat && !absinfo_y->resolution))) {
         return SDL_TRUE;
     }
 
@@ -1372,14 +1498,14 @@ static int PrepareJoystickHwdata(SDL_Joystick *joystick, SDL_joylist_item *item,
             return SDL_SetError("Unable to open %s", item->path);
         }
         /* If opening sensor fail, continue with buttons and axes only */
-        if (item_sensor != NULL) {
+        if (item_sensor) {
             fd_sensor = open(item_sensor->path, O_RDONLY | O_CLOEXEC, 0);
         }
 
         joystick->hwdata->fd = fd;
         joystick->hwdata->fd_sensor = fd_sensor;
         joystick->hwdata->fname = SDL_strdup(item->path);
-        if (joystick->hwdata->fname == NULL) {
+        if (!joystick->hwdata->fname) {
             close(fd);
             if (fd_sensor >= 0) {
                 close(fd_sensor);
@@ -1405,7 +1531,9 @@ static SDL_sensorlist_item *GetSensor(SDL_joylist_item *item)
     char uniq_item[128];
     int fd_item = -1;
 
-    if (item == NULL || SDL_sensorlist == NULL) {
+    SDL_AssertJoysticksLocked();
+
+    if (!item || !SDL_sensorlist) {
         return NULL;
     }
 
@@ -1422,10 +1550,10 @@ static SDL_sensorlist_item *GetSensor(SDL_joylist_item *item)
     SDL_Log("Joystick UNIQ: %s\n", uniq_item);
 #endif /* DEBUG_INPUT_EVENTS */
 
-    for (item_sensor = SDL_sensorlist; item_sensor != NULL; item_sensor = item_sensor->next) {
+    for (item_sensor = SDL_sensorlist; item_sensor; item_sensor = item_sensor->next) {
         char uniq_sensor[128];
         int fd_sensor = -1;
-        if (item_sensor->hwdata != NULL) {
+        if (item_sensor->hwdata) {
             /* already associated with another joystick */
             continue;
         }
@@ -1458,22 +1586,24 @@ static SDL_sensorlist_item *GetSensor(SDL_joylist_item *item)
  */
 static int LINUX_JoystickOpen(SDL_Joystick *joystick, int device_index)
 {
-    SDL_joylist_item *item = JoystickByDevIndex(device_index);
-    SDL_sensorlist_item *item_sensor = GetSensor(item);
+    SDL_joylist_item *item;
+    SDL_sensorlist_item *item_sensor;
 
     SDL_AssertJoysticksLocked();
 
-    if (item == NULL) {
+    item = JoystickByDevIndex(device_index);
+    if (!item) {
         return SDL_SetError("No such device");
     }
 
     joystick->instance_id = item->device_instance;
     joystick->hwdata = (struct joystick_hwdata *)
         SDL_calloc(1, sizeof(*joystick->hwdata));
-    if (joystick->hwdata == NULL) {
+    if (!joystick->hwdata) {
         return SDL_OutOfMemory();
     }
 
+    item_sensor = GetSensor(item);
     if (PrepareJoystickHwdata(joystick, item, item_sensor) == -1) {
         SDL_free(joystick->hwdata);
         joystick->hwdata = NULL;
@@ -1483,7 +1613,7 @@ static int LINUX_JoystickOpen(SDL_Joystick *joystick, int device_index)
     SDL_assert(item->hwdata == NULL);
     SDL_assert(!item_sensor || item_sensor->hwdata == NULL);
     item->hwdata = joystick->hwdata;
-    if (item_sensor != NULL) {
+    if (item_sensor) {
         item_sensor->hwdata = joystick->hwdata;
     }
 
@@ -1578,6 +1708,8 @@ static int LINUX_JoystickSendEffect(SDL_Joystick *joystick, const void *data, in
 
 static int LINUX_JoystickSetSensorsEnabled(SDL_Joystick *joystick, SDL_bool enabled)
 {
+    SDL_AssertJoysticksLocked();
+
     if (!joystick->hwdata->has_accelerometer && !joystick->hwdata->has_gyro) {
         return SDL_Unsupported();
     }
@@ -1586,7 +1718,7 @@ static int LINUX_JoystickSetSensorsEnabled(SDL_Joystick *joystick, SDL_bool enab
     }
 
     if (enabled) {
-        if (joystick->hwdata->item_sensor == NULL) {
+        if (!joystick->hwdata->item_sensor) {
             return SDL_SetError("Sensors unplugged.");
         }
         joystick->hwdata->fd_sensor = open(joystick->hwdata->item_sensor->path, O_RDONLY | O_CLOEXEC, 0);
@@ -1758,6 +1890,8 @@ static void PollAllSensors(SDL_Joystick *joystick)
 {
     struct input_absinfo absinfo;
     int i;
+
+    SDL_AssertJoysticksLocked();
 
     SDL_assert(joystick->hwdata->fd_sensor >= 0);
 
@@ -2092,6 +2226,8 @@ static void LINUX_JoystickQuit(void)
     SDL_sensorlist_item *item_sensor = NULL;
     SDL_sensorlist_item *next_sensor = NULL;
 
+    SDL_AssertJoysticksLocked();
+
     if (inotify_fd >= 0) {
         close(inotify_fd);
         inotify_fd = -1;
@@ -2111,7 +2247,7 @@ static void LINUX_JoystickQuit(void)
 
     numjoysticks = 0;
 
-#if SDL_USE_LIBUDEV
+#ifdef SDL_USE_LIBUDEV
     if (enumeration_method == ENUMERATION_LIBUDEV) {
         SDL_UDEV_DelCallback(joystick_udev_callback);
         SDL_UDEV_Quit();
@@ -2161,7 +2297,7 @@ static SDL_bool LINUX_JoystickGetGamepadMapping(int device_index, SDL_GamepadMap
     /* We temporarily open the device to check how it's configured. Make
        a fake SDL_Joystick object to do so. */
     joystick = (SDL_Joystick *)SDL_calloc(sizeof(*joystick), 1);
-    if (joystick == NULL) {
+    if (!joystick) {
         SDL_OutOfMemory();
         return SDL_FALSE;
     }
@@ -2170,7 +2306,7 @@ static SDL_bool LINUX_JoystickGetGamepadMapping(int device_index, SDL_GamepadMap
 
     joystick->hwdata = (struct joystick_hwdata *)
         SDL_calloc(1, sizeof(*joystick->hwdata));
-    if (joystick->hwdata == NULL) {
+    if (!joystick->hwdata) {
         SDL_free(joystick);
         SDL_OutOfMemory();
         return SDL_FALSE;
@@ -2609,6 +2745,7 @@ SDL_JoystickDriver SDL_LINUX_JoystickDriver = {
     LINUX_JoystickDetect,
     LINUX_JoystickGetDeviceName,
     LINUX_JoystickGetDevicePath,
+    LINUX_JoystickGetDeviceSteamVirtualGamepadSlot,
     LINUX_JoystickGetDevicePlayerIndex,
     LINUX_JoystickSetDevicePlayerIndex,
     LINUX_JoystickGetDeviceGUID,
