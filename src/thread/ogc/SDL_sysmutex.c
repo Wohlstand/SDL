@@ -72,7 +72,7 @@ SDL_DestroyMutex(SDL_mutex * mutex)
 int
 SDL_TryLockMutex(SDL_mutex * mutex)
 {
-#if SDL_THREADS_DISABLED
+#ifdef SDL_THREADS_DISABLED
     return 0;
 #else
     s32 res = 0;
@@ -102,7 +102,7 @@ SDL_TryLockMutex(SDL_mutex * mutex)
 int
 SDL_mutexP(SDL_mutex * mutex)
 {
-#if SDL_THREADS_DISABLED
+#ifdef SDL_THREADS_DISABLED
     return 0;
 #else
     s32 res = 0;
@@ -123,7 +123,7 @@ SDL_mutexP(SDL_mutex * mutex)
 int
 SDL_mutexV(SDL_mutex * mutex)
 {
-#if SDL_THREADS_DISABLED
+#ifdef SDL_THREADS_DISABLED
     return 0;
 #else
     s32 res = 0;

@@ -516,6 +516,13 @@ static const char *Wii_JoystickGetDevicePath(int device_index)
     return NULL;
 }
 
+static int Wii_JoystickGetDeviceSteamVirtualGamepadSlot(int device_index)
+{
+    (void)device_index;
+    return -1;
+}
+
+
 static int Wii_JoystickGetDevicePlayerIndex(int device_index)
 {
     (void)device_index;
@@ -777,28 +784,28 @@ Wii_JoystickGetGamepadMapping(int device_index, SDL_GamepadMapping *out)
     return SDL_FALSE;
 }
 
-SDL_JoystickDriver SDL_WII_JoystickDriver =
-{
-    Wii_JoystickInit,
-    Wii_NumJoysticks,
-    Wii_JoystickDetect,
-    Wii_JoystickGetDeviceName,
-    Wii_JoystickGetDevicePath,
-    Wii_JoystickGetDevicePlayerIndex,
-    Wii_JoystickSetDevicePlayerIndex,
-    Wii_JoystickGetDeviceGUID,
-    Wii_JoystickGetDeviceInstanceID,
-    Wii_JoystickOpen,
-    Wii_JoystickRumble,
-    Wii_JoystickRumbleTriggers,
-    Wii_JoystickGetCapabilities,
-    Wii_JoystickSetLED,
-    Wii_JoystickSendEffect,
-    Wii_JoystickSetSensorsEnabled,
-    Wii_JoystickUpdate,
-    Wii_JoystickClose,
-    Wii_JoystickQuit,
-    Wii_JoystickGetGamepadMapping
+SDL_JoystickDriver SDL_WII_JoystickDriver = {
+    .Init = Wii_JoystickInit,
+    .GetCount = Wii_NumJoysticks,
+    .Detect = Wii_JoystickDetect,
+    .GetDeviceName = Wii_JoystickGetDeviceName,
+    .GetDevicePath = Wii_JoystickGetDevicePath,
+    .GetDeviceSteamVirtualGamepadSlot = Wii_JoystickGetDeviceSteamVirtualGamepadSlot,
+    .GetDevicePlayerIndex = Wii_JoystickGetDevicePlayerIndex,
+    .SetDevicePlayerIndex = Wii_JoystickSetDevicePlayerIndex,
+    .GetDeviceGUID = Wii_JoystickGetDeviceGUID,
+    .GetDeviceInstanceID = Wii_JoystickGetDeviceInstanceID,
+    .Open = Wii_JoystickOpen,
+    .Rumble = Wii_JoystickRumble,
+    .RumbleTriggers = Wii_JoystickRumbleTriggers,
+    .GetCapabilities = Wii_JoystickGetCapabilities,
+    .SetLED = Wii_JoystickSetLED,
+    .SendEffect = Wii_JoystickSendEffect,
+    .SetSensorsEnabled = Wii_JoystickSetSensorsEnabled,
+    .Update = Wii_JoystickUpdate,
+    .Close = Wii_JoystickClose,
+    .Quit = Wii_JoystickQuit,
+    .GetGamepadMapping = Wii_JoystickGetGamepadMapping
 };
 
 #endif /* SDL_JOYSTICK_WII */
