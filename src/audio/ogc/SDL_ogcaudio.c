@@ -41,7 +41,7 @@
 #define OGC_AUDIO_SAMPLE_ALIGN(s)   (((s) + 63) & ~63)
 #define OGC_AUDIO_MAX_VOLUME    255
 
-/* The tag name used by VITA audio */
+/* The tag name used by OGC audio */
 #define OGCAUD_DRIVER_NAME     "ogc"
 
 static struct SDL_AudioDevice *s_callback_data[8];
