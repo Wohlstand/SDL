@@ -141,6 +141,7 @@ check_cpu_architecture(x64 SDL_CPU_X64)
 check_cpu_architecture(arm32 SDL_CPU_ARM32)
 check_cpu_architecture(arm64 SDL_CPU_ARM64)
 check_cpu_architecture(loongarch64 SDL_CPU_LOONGARCH64)
+check_cpu_architecture(powerpc SDL_CPU_POWERPC)
 
 # Check for 64 or 32 bit
 set(SIZEOF_VOIDP ${CMAKE_SIZEOF_VOID_P})
@@ -238,7 +239,7 @@ if(USE_GCC OR USE_CLANG OR USE_INTELCC OR USE_QCC)
 endif()
 
 # Default option knobs
-if(UNIX OR MINGW OR MSYS OR (USE_CLANG AND NOT WINDOWS) OR VITA OR PSP OR PS2 OR WII OR N3DS)
+if(UNIX OR MINGW OR MSYS OR (USE_CLANG AND NOT WINDOWS) OR VITA OR PSP OR PS2 OR N3DS OR OGC)
   set(OPT_DEF_LIBC ON)
 endif()
 if(WINDOWS OR IOS OR TVOS)
@@ -355,7 +356,7 @@ if(EMSCRIPTEN)
   set(SDL_CPUINFO_ENABLED_BY_DEFAULT OFF)
 endif()
 
-if(VITA OR PSP OR PS2 OR WII OR N3DS)
+if(VITA OR PSP OR PS2 OR N3DS OR OGC)
   set(SDL_SHARED_ENABLED_BY_DEFAULT OFF)
   set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
 endif()
@@ -885,7 +886,7 @@ if(SDL_ASSEMBLY)
 
     check_include_file("immintrin.h" HAVE_IMMINTRIN_H)
 
-    if(SDL_ALTIVEC AND NOT WII)
+    if(SDL_ALTIVEC AND NOT OGC)
       set(CMAKE_REQUIRED_FLAGS "-maltivec")
       check_c_source_compiles("
           #include <altivec.h>
@@ -1123,7 +1124,7 @@ if(SDL_LIBC)
     endforeach()
     if(HAVE_LIBM)
       set(CMAKE_REQUIRED_LIBRARIES)
-      if(NOT VITA)
+      if(NOT VITA AND NOT NINTENDO_SWITCH AND NOT NINTENDO_WII)
         list(APPEND EXTRA_LIBS m)
       endif()
     endif()
