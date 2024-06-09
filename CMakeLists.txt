@@ -6,7 +6,7 @@ endif()
 set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 
 cmake_minimum_required(VERSION 3.0.0...3.5)
-project(SDL2 C CXX)
+project(SDL2 C)
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   set(SDL2_SUBPROJECT OFF)
@@ -15,6 +15,7 @@ else()
 endif()
 
 if (HAIKU)
+  enable_language(CXX)
   set(LINKER_LANGUAGE CXX)
 endif()
 
@@ -86,7 +87,7 @@ endif()
 
 # See docs/release_checklist.md
 set(SDL_MAJOR_VERSION 2)
-set(SDL_MINOR_VERSION 29)
+set(SDL_MINOR_VERSION 31)
 set(SDL_MICRO_VERSION 0)
 set(SDL_VERSION "${SDL_MAJOR_VERSION}.${SDL_MINOR_VERSION}.${SDL_MICRO_VERSION}")
 
@@ -248,6 +249,11 @@ endif()
 # Default option knobs
 if(UNIX OR MINGW OR MSYS OR (USE_CLANG AND NOT WINDOWS) OR VITA OR PSP OR PS2 OR N3DS)
   set(OPT_DEF_LIBC ON)
+endif()
+if(WINDOWS OR DARWIN OR MACOSX OR IOS OR TVOS)
+  set(SDL_SYSTEM_ICONV_DEFAULT OFF)
+else()
+  set(SDL_SYSTEM_ICONV_DEFAULT ON)
 endif()
 
 if(NOT ("$ENV{CFLAGS}" STREQUAL ""))
@@ -428,7 +434,8 @@ set_option(SDL_DIRECTFB            "Use DirectFB video driver" OFF)
 dep_option(SDL_DIRECTFB_SHARED     "Dynamically load directfb support" ON "SDL_DIRECTFB" OFF)
 set_option(SDL_DUMMYVIDEO          "Use dummy video driver" ON)
 dep_option(SDL_IBUS                "Enable IBus support" ON ${UNIX_SYS} OFF)
-set_option(SDL_SYSTEM_ICONV        "Use iconv() from system-installed libraries" ON)
+set_option(SDL_SYSTEM_ICONV        "Use iconv() from system-installed libraries" ${SDL_SYSTEM_ICONV_DEFAULT})
+set_option(SDL_LIBICONV            "Prefer iconv() from libiconv, if available, over libc version" OFF)
 set_option(SDL_OPENGL              "Include OpenGL support" ON)
 set_option(SDL_OPENGLES            "Include OpenGL ES support" ON)
 set_option(SDL_PTHREADS            "Use POSIX threads for multi-threading" ${SDL_PTHREADS_ENABLED_BY_DEFAULT})
@@ -468,7 +475,7 @@ dep_option(SDL_WAYLAND_SHARED      "Dynamically load Wayland support" ON "SDL_WA
 dep_option(SDL_WAYLAND_LIBDECOR    "Use client-side window decorations on Wayland" ON "SDL_WAYLAND" OFF)
 dep_option(SDL_WAYLAND_LIBDECOR_SHARED     "Dynamically load libdecor support" ON "SDL_WAYLAND_LIBDECOR;SDL_WAYLAND_SHARED" OFF)
 dep_option(SDL_WAYLAND_QT_TOUCH    "QtWayland server support for Wayland video driver" ON "SDL_WAYLAND" OFF)
-set_option(SDL_RPI                 "Use Raspberry Pi video driver" ${UNIX_SYS})
+set_option(SDL_RPI                 "Use Raspberry Pi 0-3 video driver" ${UNIX_SYS})
 set_option(SDL_COCOA               "Use Cocoa video driver" ${APPLE})
 set_option(SDL_DIRECTX             "Use DirectX for Windows audio/video" ${WINDOWS})
 set_option(SDL_XINPUT              "Use Xinput for Windows" ${WINDOWS})
@@ -597,6 +604,11 @@ if(USE_GCC OR USE_CLANG OR USE_INTELCC OR USE_QCC)
     if(HAIKU)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-multichar")
     endif()
+  endif()
+
+  check_c_compiler_flag(-Wundef HAVE_GCC_WUNDEF)
+  if(HAVE_GCC_WUNDEF)
+    list(APPEND EXTRA_CFLAGS "-Wundef")
   endif()
 
   check_c_compiler_flag(-fno-strict-aliasing HAVE_GCC_NO_STRICT_ALIASING)
@@ -916,7 +928,7 @@ if(SDL_ASSEMBLY)
 
     if(SDL_LSX)
       cmake_push_check_state()
-      list(APPEND CMAKE_REQUIRED_FLAGS "-mlsx")
+      set(CMAKE_REQUIRED_FLAGS "-mlsx")
       check_c_source_compiles("
           #ifndef __loongarch_sx
           #error Assembler CPP flag not enabled
@@ -928,22 +940,6 @@ if(SDL_ASSEMBLY)
       if(CPU_SUPPORTS_LSX AND HAVE_LSXINTRIN_H)
         list(APPEND EXTRA_CFLAGS "-mlsx")
         set(HAVE_LSX TRUE)
-      endif()
-    endif()
-
-    if(SDL_LASX)
-      cmake_push_check_state()
-      list(APPEND CMAKE_REQUIRED_FLAGS "-mlasx")
-      check_c_source_compiles("
-          #ifndef __loongarch_asx
-          #error Assembler CPP flag not enabled
-          #endif
-          int main(int argc, char **argv) { return 0; }" CPU_SUPPORTS_LASX)
-      check_include_file("lasxintrin.h" HAVE_LASXINTRIN_H)
-      cmake_pop_check_state()
-      if(CPU_SUPPORTS_LASX AND HAVE_LASXINTRIN_H)
-        list(APPEND EXTRA_CFLAGS "-mlasx")
-        set(HAVE_LASX TRUE)
       endif()
     endif()
 
@@ -1112,6 +1108,8 @@ if(SDL_LIBC)
     check_symbol_exists(getauxval "sys/auxv.h" HAVE_GETAUXVAL)
     check_symbol_exists(elf_aux_info "sys/auxv.h" HAVE_ELF_AUX_INFO)
     check_symbol_exists(poll "poll.h" HAVE_POLL)
+    check_symbol_exists(memfd_create "sys/mman.h" HAVE_MEMFD_CREATE)
+    check_symbol_exists(posix_fallocate "fcntl.h" HAVE_POSIX_FALLOCATE)
 
     check_library_exists(m pow "" HAVE_LIBM)
     if(HAVE_LIBM)
@@ -1134,16 +1132,31 @@ if(SDL_LIBC)
     endif()
 
     if(SDL_SYSTEM_ICONV)
-      check_library_exists(iconv iconv_open "" HAVE_LIBICONV)
-      if(HAVE_LIBICONV)
-        list(APPEND EXTRA_LIBS iconv)
+      check_c_source_compiles("
+        #define LIBICONV_PLUG 1 /* in case libiconv header is in include path */
+        #include <stddef.h>
+        #include <iconv.h>
+        int main(int argc, char **argv) {
+            return !iconv_open(NULL,NULL);
+        }" ICONV_IN_LIBC)
+
+      cmake_push_check_state()
+      list(APPEND CMAKE_REQUIRED_LIBRARIES iconv)
+      check_c_source_compiles("
+        #include <stddef.h>
+        #include <iconv.h>
+        int main(int argc, char **argv) {
+            return !iconv_open(NULL,NULL);
+        }" ICONV_IN_LIBICONV)
+      cmake_pop_check_state()
+
+      if(ICONV_IN_LIBC OR ICONV_IN_LIBICONV)
         set(HAVE_ICONV 1)
         set(HAVE_SYSTEM_ICONV TRUE)
-      else()
-        check_library_exists(c iconv_open "" HAVE_BUILTIN_ICONV)
-        if(HAVE_BUILTIN_ICONV)
-          set(HAVE_ICONV 1)
-          set(HAVE_SYSTEM_ICONV TRUE)
+        if(ICONV_IN_LIBICONV AND (SDL_LIBICONV OR (NOT ICONV_IN_LIBC)))
+          set(SDL_USE_LIBICONV 1)
+          set(HAVE_LIBICONV TRUE)
+          list(APPEND EXTRA_LIBS iconv)
         endif()
       endif()
     endif()
@@ -1657,6 +1670,11 @@ elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
       list(APPEND SOURCE_FILES "${SDL2_SOURCE_DIR}/src/core/freebsd/SDL_evdev_kbd_freebsd.c")
     endif()
 
+    if(HAVE_INPUT_WSCONS)
+      list(APPEND SOURCE_FILES "${SDL2_SOURCE_DIR}/src/core/openbsd/SDL_wscons_kbd.c")
+      list(APPEND SOURCE_FILES "${SDL2_SOURCE_DIR}/src/core/openbsd/SDL_wscons_mouse.c")
+    endif()
+
     # Always compiled for Linux, unconditionally:
     list(APPEND SOURCE_FILES "${SDL2_SOURCE_DIR}/src/core/linux/SDL_evdev_capabilities.c")
     list(APPEND SOURCE_FILES "${SDL2_SOURCE_DIR}/src/core/linux/SDL_threadprio.c")
@@ -1772,6 +1790,7 @@ elseif(WINDOWS)
   list(APPEND SOURCE_FILES ${CORE_SOURCES})
 
   if(WINDOWS_STORE)
+    enable_language(CXX)
     file(GLOB WINRT_SOURCE_FILES ${SDL2_SOURCE_DIR}/src/core/winrt/*.c ${SDL2_SOURCE_DIR}/src/core/winrt/*.cpp)
     list(APPEND SOURCE_FILES ${WINRT_SOURCE_FILES})
   endif()
@@ -1809,13 +1828,11 @@ elseif(WINDOWS)
     check_include_file(d3d9.h HAVE_D3D_H)
     check_include_file(d3d11_1.h HAVE_D3D11_H)
     check_c_source_compiles("
-      #include <winsdkver.h>
-      #include <sdkddkver.h>
       #include <d3d12.h>
+      #include <d3d12sdklayers.h>
       ID3D12Device1 *device;
-      #if WDK_NTDDI_VERSION > 0x0A000008
-      int main(int argc, char **argv) { return 0; }
-      #endif" HAVE_D3D12_H)
+      int main(int argc, char **argv) {return 0; }
+      " HAVE_D3D12_H)
     check_include_file(ddraw.h HAVE_DDRAW_H)
     check_include_file(dsound.h HAVE_DSOUND_H)
     check_include_file(dinput.h HAVE_DINPUT_H)
@@ -2552,7 +2569,7 @@ elseif(VITA)
       ${SDL2_SOURCE_DIR}/src/thread/vita/SDL_sysmutex.c
       ${SDL2_SOURCE_DIR}/src/thread/vita/SDL_syssem.c
       ${SDL2_SOURCE_DIR}/src/thread/vita/SDL_systhread.c
-      ${SDL2_SOURCE_DIR}/src/thread/vita/SDL_syscond.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_syscond.c
       ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c)
     set(HAVE_SDL_THREADS TRUE)
   endif()
@@ -2704,7 +2721,10 @@ elseif(PSP)
   endif()
   if(SDL_THREADS)
     set(SDL_THREAD_PSP 1)
-    file(GLOB PSP_THREAD_SOURCES ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c ${SDL2_SOURCE_DIR}/src/thread/psp/*.c)
+    file(GLOB PSP_THREAD_SOURCES
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_syscond.c
+      ${SDL2_SOURCE_DIR}/src/thread/psp/*.c)
     list(APPEND SOURCE_FILES ${PSP_THREAD_SOURCES})
     set(HAVE_SDL_THREADS TRUE)
   endif()
@@ -2765,7 +2785,11 @@ elseif(PS2)
   endif()
   if(SDL_THREADS)
     set(SDL_THREAD_PS2 1)
-    file(GLOB PS2_THREAD_SOURCES ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_sysmutex.c ${SDL2_SOURCE_DIR}/src/thread/ps2/*.c)
+    file(GLOB PS2_THREAD_SOURCES
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_sysmutex.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_syscond.c
+      ${SDL2_SOURCE_DIR}/src/thread/ps2/*.c)
     list(APPEND SOURCE_FILES ${PS2_THREAD_SOURCES})
     set(HAVE_SDL_THREADS TRUE)
   endif()
@@ -2896,7 +2920,9 @@ elseif(N3DS)
   if(SDL_THREADS)
     set(SDL_THREAD_N3DS 1)
     file(GLOB N3DS_THREAD_SOURCES ${SDL2_SOURCE_DIR}/src/thread/n3ds/*.c)
-    list(APPEND SOURCE_FILES ${N3DS_THREAD_SOURCES} ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c)
+    list(APPEND SOURCE_FILES ${N3DS_THREAD_SOURCES}
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_systls.c
+      ${SDL2_SOURCE_DIR}/src/thread/generic/SDL_syscond.c)
     set(HAVE_SDL_THREADS TRUE)
   endif()
 
@@ -3185,7 +3211,7 @@ endif()
 
 # Clean up the different lists
 listtostr(EXTRA_LIBS _EXTRA_LIBS "-l")
-set(SDL_STATIC_LIBS ${SDL_LIBS} ${EXTRA_LDFLAGS} ${_EXTRA_LIBS})
+set(SDL_STATIC_LIBS ${EXTRA_LDFLAGS} ${_EXTRA_LIBS})
 list(REMOVE_DUPLICATES SDL_STATIC_LIBS)
 listtostr(SDL_STATIC_LIBS _SDL_STATIC_LIBS)
 set(SDL_STATIC_LIBS ${_SDL_STATIC_LIBS})
@@ -3568,8 +3594,8 @@ if(NOT SDL2_DISABLE_INSTALL)
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-    if(MSVC AND NOT CMAKE_VERSION VERSION_LESS "3.1")
-      install(FILES $<TARGET_PDB_FILE:SDL2> DESTINATION "${CMAKE_INSTALL_BINDIR}" OPTIONAL)
+    if(MSVC)
+      SDL_install_pdb(SDL2 "${CMAKE_INSTALL_BINDIR}")
     endif()
   endif()
 
@@ -3578,6 +3604,9 @@ if(NOT SDL2_DISABLE_INSTALL)
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    if(MSVC)
+      SDL_install_pdb(SDL2main "${CMAKE_INSTALL_LIBDIR}")
+    endif()
   endif()
 
   if(SDL_STATIC)
@@ -3585,6 +3614,9 @@ if(NOT SDL2_DISABLE_INSTALL)
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    if(MSVC)
+      SDL_install_pdb(SDL2-static "${CMAKE_INSTALL_LIBDIR}")
+    endif()
   endif()
 
   if(SDL_TEST)
@@ -3592,6 +3624,9 @@ if(NOT SDL2_DISABLE_INSTALL)
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    if(MSVC)
+      SDL_install_pdb(SDL2_test "${CMAKE_INSTALL_LIBDIR}")
+    endif()
   endif()
 
   ##### Export files #####
