@@ -319,6 +319,18 @@ extern "C" {
 #define SDL_HINT_AUDIO_RESAMPLING_MODE   "SDL_AUDIO_RESAMPLING_MODE"
 
 /**
+ * A variable that can disable the audio capture at all.
+ *
+ * This hint is currently only checked at audio subsystem initialization.
+ *
+ * This variable can be set to the following values:
+ *
+ * - "0": Enable the audio capture normally (Default when is not set)
+ * - "1": Disable the audio capture at all
+ */
+#define SDL_HINT_AUDIO_DISABLE_CAPTURE   "SDL_AUDIO_DISABLE_CAPTURE"
+
+/**
  * A variable controlling whether SDL updates joystick state when getting
  * input events
  *

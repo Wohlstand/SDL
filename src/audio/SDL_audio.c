@@ -239,12 +239,14 @@ static SDL_AudioDevice *get_audio_device(SDL_AudioDeviceID id)
 /* stubs for audio drivers that don't need a specific entry point... */
 static void SDL_AudioDetectDevices_Default(void)
 {
+    const char *hint = SDL_GetHint(SDL_HINT_AUDIO_DISABLE_CAPTURE);
+
     /* you have to write your own implementation if these assertions fail. */
     SDL_assert(current_audio.impl.OnlyHasDefaultOutputDevice);
     SDL_assert(current_audio.impl.OnlyHasDefaultCaptureDevice || !current_audio.impl.HasCaptureSupport);
 
     SDL_AddAudioDevice(SDL_FALSE, DEFAULT_OUTPUT_DEVNAME, NULL, (void *)((size_t)0x1));
-    if (current_audio.impl.HasCaptureSupport) {
+    if ((!hint || *hint != '1') && current_audio.impl.HasCaptureSupport) {
         SDL_AddAudioDevice(SDL_TRUE, DEFAULT_INPUT_DEVNAME, NULL, (void *)((size_t)0x2));
     }
 }

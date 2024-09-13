@@ -278,7 +278,12 @@ static void reprocess_device_list(const int iscapture, AudioDeviceList **list)
 /* this is called when the system's list of available audio devices changes. */
 static OSStatus device_list_changed(AudioObjectID systemObj, UInt32 num_addr, const AudioObjectPropertyAddress *addrs, void *data)
 {
-    reprocess_device_list(SDL_TRUE, &capture_devs);
+    const char *hint = SDL_GetHint(SDL_HINT_AUDIO_DISABLE_CAPTURE);
+
+    if ((!hint || *hint != '1') {
+        reprocess_device_list(SDL_TRUE, &capture_devs);
+    }
+
     reprocess_device_list(SDL_FALSE, &output_devs);
     return 0;
 }
