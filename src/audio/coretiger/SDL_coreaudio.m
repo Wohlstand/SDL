@@ -181,7 +181,7 @@ build_device_list(int iscapture, addDevFn addfn, void *addfndata)
                    ((iscapture) ? "capture" : "output"),
                    (int) *devCount, ptr, (int) dev);
 #endif
-            addfn(ptr, &spec, dev, iscapture, addfndata);
+            addfn(ptr, &spec, iscapture, dev, addfndata);
         }
         SDL_free(ptr);  /* addfn() would have copied the string. */
     }
