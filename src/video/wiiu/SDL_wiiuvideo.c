@@ -106,9 +106,10 @@ static int WIIU_ForegroundAcquired(_THIS)
 	if (videodata->handleProcUI) {
 		SDL_SendAppEvent(SDL_APP_WILLENTERFOREGROUND);
 		SDL_SendAppEvent(SDL_APP_DIDENTERFOREGROUND);
-		if (GX2GetSwapInterval() == 0) {
-			GX2SetSwapInterval(0); /* If V-Sync is disabled, to let render not freeze, call this method with 0 */
-		}
+	}
+
+	if (GX2GetSwapInterval() == 0) {
+		GX2SetSwapInterval(0); /* Workaround for leaving foreground with a swap interval 0 */
 	}
 
 	while (window) {
