@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -822,6 +822,7 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
         switch (retCode) {
         case SDL_ICONV_E2BIG:
         {
+            const ptrdiff_t diff = (ptrdiff_t) (outbuf - string);
             char *oldstring = string;
             stringsize *= 2;
             string = (char *)SDL_realloc(string, stringsize + sizeof(Uint32));
@@ -830,8 +831,8 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
                 SDL_iconv_close(cd);
                 return NULL;
             }
-            outbuf = string + (outbuf - oldstring);
-            outbytesleft = stringsize - (outbuf - string);
+            outbuf = string + diff;
+            outbytesleft = stringsize - diff;
             SDL_memset(outbuf, 0, sizeof(Uint32));
             continue;
         }

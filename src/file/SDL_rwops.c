@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -36,9 +36,9 @@
 
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
+#include <errno.h>
 #include <sys/stat.h>
 #endif
-
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
@@ -369,6 +369,7 @@ stdio_size(SDL_RWops * context)
 static Sint64 SDLCALL stdio_seek(SDL_RWops *context, Sint64 offset, int whence)
 {
     int stdiowhence;
+    SDL_bool is_noop;
 
     switch (whence) {
     case RW_SEEK_SET:
@@ -390,7 +391,10 @@ static Sint64 SDLCALL stdio_seek(SDL_RWops *context, Sint64 offset, int whence)
     }
 #endif
 
-    if (fseek(context->hidden.stdio.fp, (fseek_off_t)offset, stdiowhence) == 0) {
+    /* don't make a possibly-costly API call for the noop seek from SDL_RWtell */
+    is_noop = (whence == RW_SEEK_CUR) && (offset == 0);
+
+    if (is_noop || fseek(context->hidden.stdio.fp, (fseek_off_t)offset, stdiowhence) == 0) {
         Sint64 pos = ftell(context->hidden.stdio.fp);
         if (pos < 0) {
             return SDL_SetError("Couldn't get stream offset");
@@ -525,16 +529,17 @@ static int SDLCALL mem_close(SDL_RWops *context)
 /* Functions to create SDL_RWops structures from various data sources */
 
 #if defined(HAVE_STDIO_H) && !(defined(__WIN32__) || defined(__GDK__))
-static SDL_bool SDL_IsRegularFile(FILE *f)
+static SDL_bool IsRegularFileOrPipe(FILE *f)
 {
     #ifdef __WINRT__
     struct __stat64 st;
-    if (_fstat64(_fileno(f), &st) < 0 || (st.st_mode & _S_IFMT) != _S_IFREG) {
+    if (_fstat64(_fileno(f), &st) < 0 ||
+        !((st.st_mode & _S_IFMT) == _S_IFREG || (st.st_mode & _S_IFMT) == _S_IFIFO)) {
         return SDL_FALSE;
     }
-    #else
+    #elif !defined __EMSCRIPTEN__
     struct stat st;
-    if (fstat(fileno(f), &st) < 0 || !S_ISREG(st.st_mode)) {
+    if (fstat(fileno(f), &st) < 0 || !(S_ISREG(st.st_mode) || S_ISFIFO(st.st_mode))) {
         return SDL_FALSE;
     }
     #endif
@@ -555,9 +560,9 @@ SDL_RWops *SDL_RWFromFile(const char *file, const char *mode)
     if (*file == '/') {
         FILE *fp = fopen(file, mode);
         if (fp) {
-            if (!SDL_IsRegularFile(fp)) {
+            if (!IsRegularFileOrPipe(fp)) {
                 fclose(fp);
-                SDL_SetError("%s is not a regular file", file);
+                SDL_SetError("%s is not a regular file or pipe", file);
                 return NULL;
             }
             return SDL_RWFromFP(fp, 1);
@@ -575,9 +580,9 @@ SDL_RWops *SDL_RWFromFile(const char *file, const char *mode)
             fp = fopen(path, mode);
             SDL_stack_free(path);
             if (fp) {
-                if (!SDL_IsRegularFile(fp)) {
+                if (!IsRegularFileOrPipe(fp)) {
                     fclose(fp);
-                    SDL_SetError("%s is not a regular file", path);
+                    SDL_SetError("%s is not a regular file or pipe", path);
                     return NULL;
                 }
                 return SDL_RWFromFP(fp, 1);
@@ -632,11 +637,11 @@ SDL_RWops *SDL_RWFromFile(const char *file, const char *mode)
         FILE *fp = fopen(file, mode);
 #endif
         if (!fp) {
-            SDL_SetError("Couldn't open %s", file);
-        } else if (!SDL_IsRegularFile(fp)) {
+            SDL_SetError("Couldn't open %s: %s", file, strerror(errno));
+        } else if (!IsRegularFileOrPipe(fp)) {
             fclose(fp);
             fp = NULL;
-            SDL_SetError("%s is not a regular file", file);
+            SDL_SetError("%s is not a regular file or pipe", file);
         } else {
             rwops = SDL_RWFromFP(fp, SDL_TRUE);
         }

@@ -67,6 +67,9 @@ static SDL_bool DriverIsProblematic(const char *driver)
          */
         "dsp",
 
+        /* Jack isn't always configured properly on end user systems */
+        "jack",
+
         /* OpenBSD sound API. Can be used on Linux, but very rare. */
         "sndio",
 
@@ -96,7 +99,7 @@ static SDL_bool DriverIsProblematic(const char *driver)
  * \sa https://wiki.libsdl.org/SDL_QuitSubSystem
  * \sa https://wiki.libsdl.org/SDL_InitSubSystem
  */
-int audio_quitInitAudioSubSystem()
+int audio_quitInitAudioSubSystem(void)
 {
     /* Stop SDL audio subsystem */
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
@@ -114,7 +117,7 @@ int audio_quitInitAudioSubSystem()
  * \sa https://wiki.libsdl.org/SDL_InitAudio
  * \sa https://wiki.libsdl.org/SDL_QuitAudio
  */
-int audio_initQuitAudio()
+int audio_initQuitAudio(void)
 {
     int result;
     int i, iMax;
@@ -195,7 +198,7 @@ int audio_initQuitAudio()
  * \sa https://wiki.libsdl.org/SDL_CloseAudio
  * \sa https://wiki.libsdl.org/SDL_QuitAudio
  */
-int audio_initOpenCloseQuitAudio()
+int audio_initOpenCloseQuitAudio(void)
 {
     int result, expectedResult;
     int i, iMax, j, k;
@@ -318,7 +321,7 @@ int audio_initOpenCloseQuitAudio()
  *
  * \sa https://wiki.libsdl.org/SDL_PauseAudio
  */
-int audio_pauseUnpauseAudio()
+int audio_pauseUnpauseAudio(void)
 {
     int result;
     int i, iMax, j, k, l;
@@ -474,7 +477,7 @@ int audio_pauseUnpauseAudio()
  * \sa https://wiki.libsdl.org/SDL_GetNumAudioDevices
  * \sa https://wiki.libsdl.org/SDL_GetAudioDeviceName
  */
-int audio_enumerateAndNameAudioDevices()
+int audio_enumerateAndNameAudioDevices(void)
 {
     int t, tt;
     int i, n, nn;
@@ -532,7 +535,7 @@ int audio_enumerateAndNameAudioDevices()
  * \sa https://wiki.libsdl.org/SDL_GetNumAudioDevices
  * \sa https://wiki.libsdl.org/SDL_GetAudioDeviceName
  */
-int audio_enumerateAndNameAudioDevicesNegativeTests()
+int audio_enumerateAndNameAudioDevicesNegativeTests(void)
 {
     int t;
     int i, j, no, nc;
@@ -578,7 +581,7 @@ int audio_enumerateAndNameAudioDevicesNegativeTests()
  * \sa https://wiki.libsdl.org/SDL_GetNumAudioDrivers
  * \sa https://wiki.libsdl.org/SDL_GetAudioDriver
  */
-int audio_printAudioDrivers()
+int audio_printAudioDrivers(void)
 {
     int i, n;
     const char *name;
@@ -608,7 +611,7 @@ int audio_printAudioDrivers()
  *
  * \sa https://wiki.libsdl.org/SDL_GetCurrentAudioDriver
  */
-int audio_printCurrentAudioDriver()
+int audio_printCurrentAudioDriver(void)
 {
     /* Check current audio driver */
     const char *name = SDL_GetCurrentAudioDriver();
@@ -639,7 +642,7 @@ int _audioFrequencies[] = { 11025, 22050, 44100, 48000 };
  *
  * \sa https://wiki.libsdl.org/SDL_BuildAudioCVT
  */
-int audio_buildAudioCVT()
+int audio_buildAudioCVT(void)
 {
     int result;
     SDL_AudioCVT cvt;
@@ -703,7 +706,7 @@ int audio_buildAudioCVT()
  *
  * \sa https://wiki.libsdl.org/SDL_BuildAudioCVT
  */
-int audio_buildAudioCVTNegative()
+int audio_buildAudioCVTNegative(void)
 {
     const char *expectedError = "Parameter 'cvt' is invalid";
     const char *error;
@@ -798,7 +801,7 @@ int audio_buildAudioCVTNegative()
  *
  * \sa https://wiki.libsdl.org/SDL_GetAudioStatus
  */
-int audio_getAudioStatus()
+int audio_getAudioStatus(void)
 {
     SDL_AudioStatus result;
 
@@ -817,7 +820,7 @@ int audio_getAudioStatus()
  *
  * \sa https://wiki.libsdl.org/SDL_GetAudioStatus
  */
-int audio_openCloseAndGetAudioStatus()
+int audio_openCloseAndGetAudioStatus(void)
 {
     SDL_AudioStatus result;
     int i;
@@ -878,7 +881,7 @@ int audio_openCloseAndGetAudioStatus()
  * \sa https://wiki.libsdl.org/SDL_LockAudioDevice
  * \sa https://wiki.libsdl.org/SDL_UnlockAudioDevice
  */
-int audio_lockUnlockOpenAudioDevice()
+int audio_lockUnlockOpenAudioDevice(void)
 {
     int i;
     int count;
@@ -942,7 +945,7 @@ int audio_lockUnlockOpenAudioDevice()
  * \sa https://wiki.libsdl.org/SDL_BuildAudioCVT
  * \sa https://wiki.libsdl.org/SDL_ConvertAudio
  */
-int audio_convertAudio()
+int audio_convertAudio(void)
 {
     int result;
     SDL_AudioCVT cvt;
@@ -1043,7 +1046,7 @@ int audio_convertAudio()
  *
  * \sa https://wiki.libsdl.org/SDL_AudioDeviceConnected
  */
-int audio_openCloseAudioDeviceConnected()
+int audio_openCloseAudioDeviceConnected(void)
 {
     int result = -1;
     int i;
@@ -1118,7 +1121,7 @@ static double sine_wave_sample(const Sint64 idx, const Sint64 rate, const Sint64
  * \sa https://wiki.libsdl.org/SDL_BuildAudioCVT
  * \sa https://wiki.libsdl.org/SDL_ConvertAudio
  */
-int audio_resampleLoss()
+int audio_resampleLoss(void)
 {
   /* Note: always test long input time (>= 5s from experience) in some test
    * cases because an improper implementation may suffer from low resampling

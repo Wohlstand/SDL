@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -32,6 +32,7 @@
 #include "../usb_ids.h"
 
 /* This is the full set of HIDAPI drivers available */
+#define SDL_JOYSTICK_HIDAPI_8BITDO
 #define SDL_JOYSTICK_HIDAPI_GAMECUBE
 #define SDL_JOYSTICK_HIDAPI_LUNA
 #define SDL_JOYSTICK_HIDAPI_PS3
@@ -47,7 +48,14 @@
 #define SDL_JOYSTICK_HIDAPI_SHIELD
 
 /* Whether HIDAPI is enabled by default */
+#if defined(__ANDROID__) || \
+    defined(__IPHONEOS__) || \
+    defined(__TVOS__)
+/* On Android, HIDAPI prompts for permissions and acquires exclusive access to the device, and on Apple mobile platforms it doesn't do anything except for handling Bluetooth Steam Controllers, so we'll leave it off by default. */
+#define SDL_HIDAPI_DEFAULT SDL_FALSE
+#else
 #define SDL_HIDAPI_DEFAULT SDL_TRUE
+#endif
 
 /* The maximum size of a USB packet for HID devices */
 #define USB_PACKET_LENGTH 64
@@ -76,6 +84,7 @@ typedef struct _SDL_HIDAPI_Device
     SDL_bool is_bluetooth;
     SDL_JoystickType joystick_type;
     SDL_GameControllerType type;
+    int steam_virtual_gamepad_slot;
 
     struct _SDL_HIDAPI_DeviceDriver *driver;
     void *context;
@@ -123,6 +132,7 @@ typedef struct _SDL_HIDAPI_DeviceDriver
 } SDL_HIDAPI_DeviceDriver;
 
 /* HIDAPI device support */
+extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_Driver8BitDo;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverCombined;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverGameCube;
 extern SDL_HIDAPI_DeviceDriver SDL_HIDAPI_DriverJoyCons;

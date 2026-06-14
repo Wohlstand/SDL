@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -19,6 +19,7 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 #include "../../SDL_internal.h"
+#include "../../SDL_utils_c.h"
 
 /* This is the iOS implementation of the SDL joystick API */
 #include "SDL_events.h"
@@ -247,6 +248,7 @@ static void CheckControllerSiriRemote(GCController *controller, int *is_siri_rem
     *is_siri_remote = 0;
 }
 
+#ifdef ENABLE_PHYSICAL_INPUT_PROFILE
 static BOOL ElementAlreadyHandled(SDL_JoystickDeviceItem *device, NSString *element, NSDictionary<NSString *, GCControllerElement *> *elements)
 {
     if ([element isEqualToString:@"Left Thumbstick Left"] ||
@@ -345,6 +347,7 @@ static BOOL ElementAlreadyHandled(SDL_JoystickDeviceItem *device, NSString *elem
     }
     return FALSE;
 }
+#endif /* ENABLE_PHYSICAL_INPUT_PROFILE */
 
 static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCController *controller)
 {
@@ -404,18 +407,28 @@ static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCControlle
     device->is_switch_joyconL = IsControllerSwitchJoyConL(controller);
     device->is_switch_joyconR = IsControllerSwitchJoyConR(controller);
 #ifdef SDL_JOYSTICK_HIDAPI
-    if ((device->is_xbox && HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_XBOXONE)) ||
+    if ((device->is_xbox && (HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_XBOXONE) ||
+                             HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_XBOX360))) ||
         (device->is_ps4 && HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_PS4)) ||
         (device->is_ps5 && HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_PS5)) ||
         (device->is_switch_pro && HIDAPI_IsDeviceTypePresent(SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO)) ||
         (device->is_switch_joycon_pair && HIDAPI_IsDevicePresent(USB_VENDOR_NINTENDO, USB_PRODUCT_NINTENDO_SWITCH_JOYCON_PAIR, 0, "")) ||
         (device->is_stadia && HIDAPI_IsDevicePresent(USB_VENDOR_GOOGLE, USB_PRODUCT_GOOGLE_STADIA_CONTROLLER, 0, "")) ||
         (device->is_switch_joyconL && HIDAPI_IsDevicePresent(USB_VENDOR_NINTENDO, USB_PRODUCT_NINTENDO_SWITCH_JOYCON_LEFT, 0, "")) ||
-        (device->is_switch_joyconR && HIDAPI_IsDevicePresent(USB_VENDOR_NINTENDO, USB_PRODUCT_NINTENDO_SWITCH_JOYCON_RIGHT, 0, ""))) {
+        (device->is_switch_joyconR && HIDAPI_IsDevicePresent(USB_VENDOR_NINTENDO, USB_PRODUCT_NINTENDO_SWITCH_JOYCON_RIGHT, 0, "")) ||
+        (SDL_strcmp(name, "8Bitdo SN30 Pro") == 0 && (HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_SN30_PRO, 0, "") || HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_SN30_PRO_BT, 0, ""))) ||
+        (SDL_strcmp(name, "8BitDo Pro 2") == 0 && (HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_PRO_2, 0, "") || HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_PRO_2_BT, 0, ""))) ||
+        (SDL_strcmp(name, "8BitDo Pro 3") == 0 && (HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_PRO_3, 0, ""))) ||
+        (SDL_startswith(name, "8BitDo Ultimate 2 Wireless") && HIDAPI_IsDevicePresent(USB_VENDOR_8BITDO, USB_PRODUCT_8BITDO_ULTIMATE2_WIRELESS, 0, ""))
+    ) {
         /* The HIDAPI driver is taking care of this device */
         return FALSE;
     }
 #endif
+    if (device->is_xbox && SDL_strncmp(name, "GamePad-", 8) == 0) {
+        /* This is a Steam Virtual Gamepad, which isn't supported by GCController */
+        return FALSE;
+    }
     CheckControllerSiriRemote(controller, &device->is_siri_remote);
 
     if (device->is_siri_remote && !SDL_GetHintBoolean(SDL_HINT_TV_REMOTE_AS_JOYSTICK, SDL_TRUE)) {
@@ -435,7 +448,7 @@ static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCControlle
             device->has_xbox_share_button = TRUE;
         }
     }
-#endif // ENABLE_PHYSICAL_INPUT_PROFILE
+#endif /* ENABLE_PHYSICAL_INPUT_PROFILE */
 
     if (device->is_backbone_one) {
         vendor = USB_VENDOR_BACKBONE;
@@ -508,7 +521,7 @@ static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCControlle
         NSDictionary<NSString *, GCControllerElement *> *elements = controller.physicalInputProfile.elements;
 
         /* Provide both axes and analog buttons as SDL axes */
-        device->axes = [[[elements allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)]
+        NSArray *axes = [[[elements allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)]
                                          filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
             GCControllerElement *element;
 
@@ -525,8 +538,7 @@ static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCControlle
             }
             return NO;
         }]];
-        device->naxes = (int)device->axes.count;
-        device->buttons = [[[elements allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)]
+        NSArray *buttons = [[[elements allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)]
                                             filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
             GCControllerElement *element;
 
@@ -540,7 +552,12 @@ static BOOL IOS_AddMFIJoystickDevice(SDL_JoystickDeviceItem *device, GCControlle
             }
             return NO;
         }]];
-        device->nbuttons = (int)device->buttons.count;
+        /* Explicitly retain the arrays because SDL_JoystickDeviceItem is a
+         * struct, and ARC doesn't work with structs. */
+        device->naxes = (int)axes.count;
+        device->axes = (__bridge NSArray *)CFBridgingRetain(axes);
+        device->nbuttons = (int)buttons.count;
+        device->buttons = (__bridge NSArray *)CFBridgingRetain(buttons);
         subtype = 4;
 
 #ifdef DEBUG_CONTROLLER_PROFILE
@@ -777,12 +794,19 @@ static SDL_JoystickDeviceItem *IOS_RemoveJoystickDevice(SDL_JoystickDeviceItem *
 
 #ifdef SDL_JOYSTICK_MFI
     @autoreleasepool {
+        /* These were explicitly retained in the struct, so they should be explicitly released before freeing the struct. */
         if (device->controller) {
-            /* The controller was explicitly retained in the struct, so it
-             * should be explicitly released before freeing the struct. */
             GCController *controller = CFBridgingRelease((__bridge CFTypeRef)(device->controller));
             controller.controllerPausedHandler = nil;
             device->controller = nil;
+        }
+        if (device->axes) {
+            CFRelease((__bridge CFTypeRef)device->axes);
+            device->axes = nil;
+        }
+        if (device->buttons) {
+            CFRelease((__bridge CFTypeRef)device->buttons);
+            device->buttons = nil;
         }
     }
 #endif /* SDL_JOYSTICK_MFI */
@@ -1265,6 +1289,8 @@ static void IOS_MFIJoystickUpdate(SDL_Joystick *joystick)
         }
 #if TARGET_OS_TV
         else if (controller.microGamepad) {
+            Uint8 buttons[joystick->nbuttons];
+            int button_count = 0;
             GCMicroGamepad *gamepad = controller.microGamepad;
 
             Sint16 axes[] = {
@@ -1276,8 +1302,6 @@ static void IOS_MFIJoystickUpdate(SDL_Joystick *joystick)
                 SDL_PrivateJoystickAxis(joystick, i, axes[i]);
             }
 
-            Uint8 buttons[joystick->nbuttons];
-            int button_count = 0;
             buttons[button_count++] = gamepad.buttonA.isPressed;
             buttons[button_count++] = gamepad.buttonX.isPressed;
             buttons[button_count++] = (device->pause_button_pressed > 0);

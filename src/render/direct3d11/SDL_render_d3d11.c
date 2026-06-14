@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -23,7 +23,7 @@
 #include "SDL_render.h"
 #include "SDL_system.h"
 
-#if defined(SDL_VIDEO_RENDER_D3D11) && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_D3D11
 
 #define COBJMACROS
 #include "../../core/windows/SDL_windows.h"
@@ -304,7 +304,6 @@ static void D3D11_DestroyRenderer(SDL_Renderer *renderer)
     if (data) {
         SDL_free(data);
     }
-    SDL_free(renderer);
 }
 
 static D3D11_BLEND GetBlendFunc(SDL_BlendFactor factor)
@@ -813,7 +812,12 @@ static HRESULT D3D11_CreateSwapChain(SDL_Renderer *renderer, int w, int h)
 #if defined(__WIN32__) || defined(__WINGDK__)
         SDL_SysWMinfo windowinfo;
         SDL_VERSION(&windowinfo.version);
-        SDL_GetWindowWMInfo(renderer->window, &windowinfo);
+        if (!SDL_GetWindowWMInfo(renderer->window, &windowinfo) ||
+            windowinfo.subsystem != SDL_SYSWM_WINDOWS) {
+            SDL_SetError("Couldn't get window handle");
+            result = E_FAIL;
+            goto done;
+        }
 
         result = IDXGIFactory2_CreateSwapChainForHwnd(data->dxgiFactory,
                                                       (IUnknown *)data->d3dDevice,
@@ -2047,6 +2051,7 @@ static int D3D11_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
             if (SDL_memcmp(viewport, &cmd->data.viewport.rect, sizeof(cmd->data.viewport.rect)) != 0) {
                 SDL_copyp(viewport, &cmd->data.viewport.rect);
                 rendererData->viewportDirty = SDL_TRUE;
+                rendererData->cliprectDirty = SDL_TRUE;
             }
             break;
         }
@@ -2307,22 +2312,13 @@ static int D3D11_SetVSync(SDL_Renderer *renderer, const int vsync)
 }
 #endif
 
-SDL_Renderer *D3D11_CreateRenderer(SDL_Window *window, Uint32 flags)
+int D3D11_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Uint32 flags)
 {
-    SDL_Renderer *renderer;
     D3D11_RenderData *data;
-
-    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
-        SDL_OutOfMemory();
-        return NULL;
-    }
 
     data = (D3D11_RenderData *)SDL_calloc(1, sizeof(*data));
     if (!data) {
-        SDL_free(renderer);
-        SDL_OutOfMemory();
-        return NULL;
+        return SDL_OutOfMemory();
     }
 
     data->identity = MatrixIdentity();
@@ -2384,14 +2380,14 @@ SDL_Renderer *D3D11_CreateRenderer(SDL_Window *window, Uint32 flags)
     /* Initialize Direct3D resources */
     if (FAILED(D3D11_CreateDeviceResources(renderer))) {
         D3D11_DestroyRenderer(renderer);
-        return NULL;
+        return -1;
     }
     if (FAILED(D3D11_CreateWindowSizeDependentResources(renderer))) {
         D3D11_DestroyRenderer(renderer);
-        return NULL;
+        return -1;
     }
 
-    return renderer;
+    return 0;
 }
 
 SDL_RenderDriver D3D11_RenderDriver = {
@@ -2415,7 +2411,7 @@ SDL_RenderDriver D3D11_RenderDriver = {
     }
 };
 
-#endif /* SDL_VIDEO_RENDER_D3D11 && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_D3D11 */
 
 #if defined(__WIN32__) || defined(__WINGDK__)
 /* This function needs to always exist on Windows, for the Dynamic API. */
@@ -2423,7 +2419,7 @@ ID3D11Device *SDL_RenderGetD3D11Device(SDL_Renderer *renderer)
 {
     ID3D11Device *device = NULL;
 
-#if defined(SDL_VIDEO_RENDER_D3D11) && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_D3D11
     D3D11_RenderData *data = (D3D11_RenderData *)renderer->driverdata;
 
     /* Make sure that this is a D3D renderer */
@@ -2436,7 +2432,7 @@ ID3D11Device *SDL_RenderGetD3D11Device(SDL_Renderer *renderer)
     if (device) {
         ID3D11Device_AddRef(device);
     }
-#endif /* SDL_VIDEO_RENDER_D3D11 && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_D3D11 */
 
     return device;
 }

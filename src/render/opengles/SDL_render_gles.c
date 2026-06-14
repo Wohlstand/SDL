@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -20,7 +20,7 @@
 */
 #include "../../SDL_internal.h"
 
-#if defined(SDL_VIDEO_RENDER_OGL_ES) && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_OGL_ES
 
 #include "SDL_hints.h"
 #include "../../video/SDL_sysvideo.h" /* For SDL_GL_SwapWindowWithResult */
@@ -997,7 +997,6 @@ static void GLES_DestroyRenderer(SDL_Renderer *renderer)
         }
         SDL_free(data);
     }
-    SDL_free(renderer);
 }
 
 static int GLES_BindTexture(SDL_Renderer *renderer, SDL_Texture *texture, float *texw, float *texh)
@@ -1054,10 +1053,9 @@ static int GLES_SetVSync(SDL_Renderer *renderer, const int vsync)
     return retval;
 }
 
-static SDL_Renderer *GLES_CreateRenderer(SDL_Window *window, Uint32 flags)
+static int GLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Uint32 flags)
 {
-    SDL_Renderer *renderer;
-    GLES_RenderData *data;
+    GLES_RenderData *data = NULL;
     GLint value;
     Uint32 window_flags;
     int profile_mask = 0, major = 0, minor = 0;
@@ -1079,12 +1077,6 @@ static SDL_Renderer *GLES_CreateRenderer(SDL_Window *window, Uint32 flags)
         if (SDL_RecreateWindow(window, (window_flags & ~(SDL_WINDOW_VULKAN | SDL_WINDOW_METAL)) | SDL_WINDOW_OPENGL) < 0) {
             goto error;
         }
-    }
-
-    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
-        SDL_OutOfMemory();
-        goto error;
     }
 
     data = (GLES_RenderData *)SDL_calloc(1, sizeof(*data));
@@ -1192,7 +1184,7 @@ static SDL_Renderer *GLES_CreateRenderer(SDL_Window *window, Uint32 flags)
     data->drawstate.color = 0xFFFFFFFF;
     data->drawstate.clear_color = 0xFFFFFFFF;
 
-    return renderer;
+    return 0;
 
 error:
     if (changed_window) {
@@ -1202,7 +1194,7 @@ error:
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
         SDL_RecreateWindow(window, window_flags);
     }
-    return NULL;
+    return -1;
 }
 
 SDL_RenderDriver GLES_RenderDriver = {
@@ -1215,6 +1207,6 @@ SDL_RenderDriver GLES_RenderDriver = {
       0 }
 };
 
-#endif /* SDL_VIDEO_RENDER_OGL_ES && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_OGL_ES */
 
 /* vi: set ts=4 sw=4 expandtab: */

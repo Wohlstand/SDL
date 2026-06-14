@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -93,11 +93,11 @@ static const AudioBootStrap *const bootstrap[] = {
 #ifdef SDL_AUDIO_DRIVER_FUSIONSOUND
     &FUSIONSOUND_bootstrap,
 #endif
-#ifdef SDL_AUDIO_DRIVER_AAUDIO
-    &aaudio_bootstrap,
-#endif
 #ifdef SDL_AUDIO_DRIVER_OPENSLES
     &openslES_bootstrap,
+#endif
+#ifdef SDL_AUDIO_DRIVER_AAUDIO
+    &aaudio_bootstrap,
 #endif
 #ifdef SDL_AUDIO_DRIVER_ANDROID
     &ANDROIDAUDIO_bootstrap,
@@ -681,6 +681,7 @@ static int SDLCALL SDL_RunAudio(void *userdata)
     int data_len = 0;
     Uint8 *data;
     Uint8 *device_buf_keepsafe = NULL;
+    Uint32 delay;
 
     SDL_assert(!device->iscapture);
 
@@ -703,8 +704,6 @@ static int SDLCALL SDL_RunAudio(void *userdata)
 
     /* Loop, filling the audio buffers */
     while (!SDL_AtomicGet(&device->shutdown)) {
-        data_len = device->callbackspec.size;
-
         /* Fill the current buffer with sound */
         if (!device->stream && SDL_AtomicGet(&device->enabled)) {
             data = current_audio.impl.GetDeviceBuf(device);
@@ -730,6 +729,8 @@ static int SDLCALL SDL_RunAudio(void *userdata)
         if (data == NULL) {
             data = device->work_buffer;
         }
+
+        data_len = device->callbackspec.size;
 
         /* !!! FIXME: this should be LockDevice. */
         SDL_LockMutex(device->mixer_lock);
@@ -764,7 +765,7 @@ static int SDLCALL SDL_RunAudio(void *userdata)
                 SDL_assert((got <= 0) || (got == device->spec.size));
 
                 if (data == NULL) { /* device is having issues... */
-                    const Uint32 delay = ((device->spec.samples * 1000) / device->spec.freq);
+                    delay = ((device->spec.samples * 1000) / device->spec.freq);
                     SDL_Delay(delay); /* wait for as long as this buffer would have played. Maybe device recovers later? */
                 } else {
                     if (got != device->spec.size) {
@@ -784,7 +785,7 @@ static int SDLCALL SDL_RunAudio(void *userdata)
             }
         } else if (data == device->work_buffer) {
             /* nothing to do; pause like we queued a buffer to play. */
-            const Uint32 delay = ((device->spec.samples * 1000) / device->spec.freq);
+            delay = ((device->spec.samples * 1000) / device->spec.freq);
             SDL_Delay(delay);
         } else { /* writing directly to the device. */
             /* queue this buffer and wait for it to finish playing. */
@@ -794,7 +795,11 @@ static int SDLCALL SDL_RunAudio(void *userdata)
     }
 
     /* Wait for the audio to drain. */
-    SDL_Delay(((device->spec.samples * 1000) / device->spec.freq) * 2);
+    delay = ((device->spec.samples * 1000) / device->spec.freq) * 2;
+    if (delay > 100) {
+        delay = 100;
+    }
+    SDL_Delay(delay);
 
     current_audio.impl.ThreadDeinit(device);
 

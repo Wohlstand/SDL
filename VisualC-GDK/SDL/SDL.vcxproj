@@ -174,7 +174,7 @@
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
     <PreBuildEvent>
-      <Command>$(SolutionDir)\shaders\buildshaders.bat $(SolutionDir)</Command>
+      <Command>$(ProjectDir)..\shaders\buildshaders.bat $(ProjectDir)..\</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox Series)</Message>
@@ -208,7 +208,7 @@
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
     <PreBuildEvent>
-      <Command>$(SolutionDir)\shaders\buildshaders.bat $(SolutionDir) one</Command>
+      <Command>$(ProjectDir)..\shaders\buildshaders.bat $(ProjectDir)..\ one</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox One)</Message>
@@ -272,7 +272,7 @@
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
     <PreBuildEvent>
-      <Command>$(SolutionDir)\shaders\buildshaders.bat $(SolutionDir)</Command>
+      <Command>$(ProjectDir)..\shaders\buildshaders.bat $(ProjectDir)..\</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox Series)</Message>
@@ -307,7 +307,7 @@
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
     <PreBuildEvent>
-      <Command>$(SolutionDir)\shaders\buildshaders.bat $(SolutionDir) one</Command>
+      <Command>$(ProjectDir)..\shaders\buildshaders.bat $(ProjectDir)..\ one</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox One)</Message>
@@ -499,7 +499,6 @@
     <ClInclude Include="..\..\src\video\khronos\vulkan\vk_platform.h" />
     <ClInclude Include="..\..\src\video\khronos\vulkan\vk_sdk_platform.h" />
     <ClInclude Include="..\..\src\video\khronos\vulkan\vulkan.h" />
-    <ClInclude Include="..\..\src\video\khronos\vulkan\vulkan.hpp" />
     <ClInclude Include="..\..\src\video\khronos\vulkan\vulkan_android.h" />
     <ClInclude Include="..\..\src\video\khronos\vulkan\vulkan_beta.h" />
     <ClInclude Include="..\..\src\video\khronos\vulkan\vulkan_core.h" />
@@ -622,6 +621,7 @@
     <ClCompile Include="..\..\src\joystick\controller_type.c" />
     <ClCompile Include="..\..\src\joystick\dummy\SDL_sysjoystick.c" />
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapijoystick.c" />
+    <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_8bitdo.c" />
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_combined.c" />
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_gamecube.c" />
     <ClCompile Include="..\..\src\joystick\hidapi\SDL_hidapi_luna.c" />

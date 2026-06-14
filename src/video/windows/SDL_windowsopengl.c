@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -511,6 +511,10 @@ void WIN_GL_InitExtensions(_THIS)
         _this->gl_data->HAS_WGL_ARB_create_context_no_error = SDL_TRUE;
     }
 
+    /* Check for WGL_ARB_pixel_format_float */
+    _this->gl_data->HAS_WGL_ARB_pixel_format_float =
+        HasExtension("WGL_ARB_pixel_format_float", extensions);
+
     _this->gl_data->wglMakeCurrent(hdc, NULL);
     _this->gl_data->wglDeleteContext(hglrc);
     ReleaseDC(hwnd, hdc);
@@ -549,11 +553,11 @@ static int WIN_GL_ChoosePixelFormatARB(_THIS, int *iAttribs, float *fAttribs)
             _this->gl_data->wglChoosePixelFormatARB(hdc, iAttribs, fAttribs,
                                                     1, &pixel_format,
                                                     &matching);
-        }
 
-        /* Check whether we actually got an SRGB capable buffer */
-        _this->gl_data->wglGetPixelFormatAttribivARB(hdc, pixel_format, 0, 1, &qAttrib, &srgb);
-        _this->gl_config.framebuffer_srgb_capable = srgb;
+            /* Check whether we actually got an SRGB capable buffer */
+            _this->gl_data->wglGetPixelFormatAttribivARB(hdc, pixel_format, 0, 1, &qAttrib, &srgb);
+            _this->gl_config.framebuffer_srgb_capable = srgb;
+        }
 
         _this->gl_data->wglMakeCurrent(hdc, NULL);
         _this->gl_data->wglDeleteContext(hglrc);
@@ -641,7 +645,8 @@ static int WIN_GL_SetupWindowInternal(_THIS, SDL_Window *window)
         *iAttr++ = _this->gl_config.multisamplesamples;
     }
 
-    if (_this->gl_config.floatbuffers) {
+    if (_this->gl_data->HAS_WGL_ARB_pixel_format_float && _this->gl_config.floatbuffers) {
+        *iAttr++ = WGL_PIXEL_TYPE_ARB;
         *iAttr++ = WGL_TYPE_RGBA_FLOAT_ARB;
     }
 
@@ -823,6 +828,9 @@ SDL_GLContext WIN_GL_CreateContext(_THIS, SDL_Window *window)
         WIN_GL_DeleteContext(_this, context);
         return NULL;
     }
+
+    _this->gl_config.HAS_GL_ARB_color_buffer_float =
+        SDL_GL_ExtensionSupported("GL_ARB_color_buffer_float");
 
     return context;
 }

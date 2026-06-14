@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -20,7 +20,7 @@
 */
 
 #include "../../SDL_internal.h"
-#if SDL_VIDEO_RENDER_D3D12 && !SDL_RENDER_DISABLED && (defined(__XBOXONE__) || defined(__XBOXSERIES__))
+#if SDL_VIDEO_RENDER_D3D12 && (defined(__XBOXONE__) || defined(__XBOXSERIES__))
 #include "SDL_render_d3d12_xbox.h"
 #include "../../core/windows/SDL_windows.h"
 #include <XGameRuntime.h>

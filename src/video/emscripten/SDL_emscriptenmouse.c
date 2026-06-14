@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -98,7 +98,7 @@ static SDL_Cursor *Emscripten_CreateCursor(SDL_Surface *surface, int hot_x, int 
 
         var image = ctx.createImageData(w, h);
         var data = image.data;
-        var src = pixels >> 2;
+        var src = pixels / 4;
         var dst = 0;
         var num;
         if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) {
@@ -141,49 +141,7 @@ static SDL_Cursor *Emscripten_CreateCursor(SDL_Surface *surface, int hot_x, int 
 
 static SDL_Cursor *Emscripten_CreateSystemCursor(SDL_SystemCursor id)
 {
-    const char *cursor_name = NULL;
-
-    switch (id) {
-    case SDL_SYSTEM_CURSOR_ARROW:
-        cursor_name = "default";
-        break;
-    case SDL_SYSTEM_CURSOR_IBEAM:
-        cursor_name = "text";
-        break;
-    case SDL_SYSTEM_CURSOR_WAIT:
-        cursor_name = "wait";
-        break;
-    case SDL_SYSTEM_CURSOR_CROSSHAIR:
-        cursor_name = "crosshair";
-        break;
-    case SDL_SYSTEM_CURSOR_WAITARROW:
-        cursor_name = "progress";
-        break;
-    case SDL_SYSTEM_CURSOR_SIZENWSE:
-        cursor_name = "nwse-resize";
-        break;
-    case SDL_SYSTEM_CURSOR_SIZENESW:
-        cursor_name = "nesw-resize";
-        break;
-    case SDL_SYSTEM_CURSOR_SIZEWE:
-        cursor_name = "ew-resize";
-        break;
-    case SDL_SYSTEM_CURSOR_SIZENS:
-        cursor_name = "ns-resize";
-        break;
-    case SDL_SYSTEM_CURSOR_SIZEALL:
-        cursor_name = "move";
-        break;
-    case SDL_SYSTEM_CURSOR_NO:
-        cursor_name = "not-allowed";
-        break;
-    case SDL_SYSTEM_CURSOR_HAND:
-        cursor_name = "pointer";
-        break;
-    default:
-        SDL_assert(0);
-        return NULL;
-    }
+    const char *cursor_name = SDL_GetCSSCursorName(id, NULL);
 
     return Emscripten_CreateCursorFromString(cursor_name, SDL_FALSE);
 }
@@ -264,7 +222,7 @@ static int Emscripten_SetRelativeMouseMode(SDL_bool enabled)
     return -1;
 }
 
-void Emscripten_InitMouse()
+void Emscripten_InitMouse(void)
 {
     SDL_Mouse *mouse = SDL_GetMouse();
 
@@ -278,7 +236,7 @@ void Emscripten_InitMouse()
     SDL_SetDefaultCursor(Emscripten_CreateDefaultCursor());
 }
 
-void Emscripten_FiniMouse()
+void Emscripten_FiniMouse(void)
 {
 }
 

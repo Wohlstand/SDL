@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -20,7 +20,7 @@
 */
 #include "../../SDL_internal.h"
 
-#if SDL_VIDEO_RENDER_SW && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_SW
 
 #include "../SDL_sysrender.h"
 #include "SDL_render_sw_c.h"
@@ -987,30 +987,20 @@ static void SW_DestroyRenderer(SDL_Renderer *renderer)
         SDL_DestroyWindowSurface(window);
     }
     SDL_free(data);
-    SDL_free(renderer);
 }
 
-SDL_Renderer *SW_CreateRendererForSurface(SDL_Surface *surface)
+int SW_CreateRendererForSurface(SDL_Renderer *renderer, SDL_Surface *surface)
 {
-    SDL_Renderer *renderer;
     SW_RenderData *data;
 
     if (!surface) {
-        SDL_InvalidParamError("surface");
-        return NULL;
-    }
-
-    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
-        SDL_OutOfMemory();
-        return NULL;
+        return SDL_InvalidParamError("surface");
     }
 
     data = (SW_RenderData *)SDL_calloc(1, sizeof(*data));
     if (!data) {
         SW_DestroyRenderer(renderer);
-        SDL_OutOfMemory();
-        return NULL;
+        return SDL_OutOfMemory();
     }
     data->surface = surface;
     data->window = surface;
@@ -1039,10 +1029,10 @@ SDL_Renderer *SW_CreateRendererForSurface(SDL_Surface *surface)
     renderer->info = SW_RenderDriver.info;
     renderer->driverdata = data;
 
-    return renderer;
+    return 0;
 }
 
-static SDL_Renderer *SW_CreateRenderer(SDL_Window *window, Uint32 flags)
+static int SW_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Uint32 flags)
 {
     const char *hint;
     SDL_Surface *surface;
@@ -1068,9 +1058,9 @@ static SDL_Renderer *SW_CreateRenderer(SDL_Window *window, Uint32 flags)
     }
 
     if (!surface) {
-        return NULL;
+        return -1;
     }
-    return SW_CreateRendererForSurface(surface);
+    return SW_CreateRendererForSurface(renderer, surface);
 }
 
 SDL_RenderDriver SW_RenderDriver = {
@@ -1093,6 +1083,6 @@ SDL_RenderDriver SW_RenderDriver = {
      0}
 };
 
-#endif /* SDL_VIDEO_RENDER_SW && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_SW */
 
 /* vi: set ts=4 sw=4 expandtab: */

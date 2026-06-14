@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -19,10 +19,16 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
+/* WIKI CATEGORY: CPUInfo */
+
 /**
- *  \file SDL_cpuinfo.h
+ * # CategoryCPUInfo
  *
- *  CPU feature detection for SDL.
+ * CPU feature detection for SDL.
+ *
+ * These functions are largely concerned with reporting if the system has
+ * access to various SIMD instruction sets, but also has other important info
+ * to share, such as number of logical CPU cores.
  */
 
 #ifndef SDL_cpuinfo_h_
@@ -33,29 +39,29 @@
 /* Need to do this here because intrin.h has C++ code in it */
 /* Visual Studio 2005 has a bug where intrin.h conflicts with winnt.h */
 #if defined(_MSC_VER) && (_MSC_VER >= 1500) && (defined(_M_IX86) || defined(_M_X64))
-#ifdef __clang__
 /* As of Clang 11, '_m_prefetchw' is conflicting with the winnt.h's version,
    so we define the needed '_m_prefetch' here as a pseudo-header, until the issue is fixed. */
-
+#if defined(__clang__) &&  !_SDL_HAS_BUILTIN(_m_prefetch)
 #ifndef __PRFCHWINTRIN_H
 #define __PRFCHWINTRIN_H
-
 static __inline__ void __attribute__((__always_inline__, __nodebug__))
 _m_prefetch(void *__P)
 {
-  __builtin_prefetch (__P, 0, 3 /* _MM_HINT_T0 */);
+  __builtin_prefetch(__P, 0, 3 /* _MM_HINT_T0 */);
 }
-
 #endif /* __PRFCHWINTRIN_H */
 #endif /* __clang__ */
+
 #include <intrin.h>
 #ifndef _WIN64
 #ifndef __MMX__
 #define __MMX__
 #endif
+/*
 #ifndef __3dNOW__
 #define __3dNOW__
 #endif
+*/
 #endif
 #ifndef __SSE__
 #define __SSE__
@@ -107,7 +113,8 @@ _m_prefetch(void *__P)
 #include <lasxintrin.h>
 #define __LASX__
 #endif
-#if defined(HAVE_IMMINTRIN_H) && !defined(SDL_DISABLE_IMMINTRIN_H)
+#if defined(HAVE_IMMINTRIN_H) && !defined(SDL_DISABLE_IMMINTRIN_H) && \
+   (defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
 #include <immintrin.h>
 #else
 #if defined(__MMX__) && !defined(SDL_DISABLE_MMINTRIN_H)

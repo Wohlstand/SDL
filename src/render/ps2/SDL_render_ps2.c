@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -20,7 +20,7 @@
 */
 #include "../../SDL_internal.h"
 
-#ifdef SDL_VIDEO_RENDER_PS2
+#if SDL_VIDEO_RENDER_PS2
 
 #include "../SDL_sysrender.h"
 #include "SDL_hints.h"
@@ -55,7 +55,7 @@ typedef struct
 static int vsync_sema_id = 0;
 
 /* PRIVATE METHODS */
-static int vsync_handler()
+static int vsync_handler(int reason)
 {
     iSignalSema(vsync_sema_id);
 
@@ -477,6 +477,7 @@ static int PS2_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd, v
         case SDL_RENDERCMD_SETVIEWPORT:
         {
             PS2_RenderSetViewPort(renderer, cmd);
+            /* FIXME: We need to update the clip rect too, see https://github.com/libsdl-org/SDL/issues/9094 */
             break;
         }
         case SDL_RENDERCMD_SETCLIPRECT:
@@ -592,8 +593,6 @@ static void PS2_DestroyRenderer(SDL_Renderer *renderer)
     if (vsync_sema_id >= 0) {
         DeleteSema(vsync_sema_id);
     }
-
-    SDL_free(renderer);
 }
 
 static int PS2_SetVSync(SDL_Renderer *renderer, const int vsync)
@@ -604,25 +603,17 @@ static int PS2_SetVSync(SDL_Renderer *renderer, const int vsync)
     return 0;
 }
 
-static SDL_Renderer *PS2_CreateRenderer(SDL_Window *window, Uint32 flags)
+static int PS2_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Uint32 flags)
 {
-    SDL_Renderer *renderer;
     PS2_RenderData *data;
     GSGLOBAL *gsGlobal;
     ee_sema_t sema;
     SDL_bool dynamicVsync;
 
-    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
-        SDL_OutOfMemory();
-        return NULL;
-    }
-
     data = (PS2_RenderData *)SDL_calloc(1, sizeof(*data));
     if (!data) {
         PS2_DestroyRenderer(renderer);
-        SDL_OutOfMemory();
-        return NULL;
+        return SDL_OutOfMemory();
     }
 
     /* Specific gsKit init */
@@ -633,8 +624,42 @@ static SDL_Renderer *PS2_CreateRenderer(SDL_Window *window, Uint32 flags)
 
     gsGlobal = gsKit_init_global_custom(RENDER_QUEUE_OS_POOLSIZE, RENDER_QUEUE_PER_POOLSIZE);
 
-    gsGlobal->Mode = GS_MODE_NTSC;
-    gsGlobal->Height = 448;
+    // GS interlaced/progressive
+    if (SDL_GetHintBoolean(SDL_HINT_PS2_GS_PROGRESSIVE, false)) {
+        gsGlobal->Interlace = GS_NONINTERLACED;
+    } else {
+        gsGlobal->Interlace = GS_INTERLACED;
+    }
+    
+    // GS width/height
+    gsGlobal->Width = 0;
+    gsGlobal->Height = 0;
+    const char *hint = SDL_GetHint(SDL_HINT_PS2_GS_WIDTH);
+    if (hint) {
+        gsGlobal->Width = SDL_atoi(hint);
+    }
+    hint = SDL_GetHint(SDL_HINT_PS2_GS_HEIGHT);
+    if (hint) {
+        gsGlobal->Height = SDL_atoi(hint);
+    }
+    if (gsGlobal->Width <= 0) {
+        gsGlobal->Width = 640;
+    }
+    if (gsGlobal->Height <= 0) {
+        gsGlobal->Height = 448;
+    }
+
+    // GS region
+    hint = SDL_GetHint(SDL_HINT_PS2_GS_MODE);
+    if (hint) {
+        if (SDL_strcasecmp(SDL_GetHint(SDL_HINT_PS2_GS_MODE), "NTSC") == 0) {
+            gsGlobal->Mode = GS_MODE_NTSC;
+        }
+
+        if (SDL_strcasecmp(SDL_GetHint(SDL_HINT_PS2_GS_MODE), "PAL") == 0) {
+            gsGlobal->Mode = GS_MODE_PAL;
+        }
+    }
 
     gsGlobal->PSM = GS_PSM_CT24;
     gsGlobal->PSMZ = GS_PSMZ_16S;
@@ -688,7 +713,7 @@ static SDL_Renderer *PS2_CreateRenderer(SDL_Window *window, Uint32 flags)
     renderer->driverdata = data;
     renderer->window = window;
 
-    return renderer;
+    return 0;
 }
 
 SDL_RenderDriver PS2_RenderDriver = {

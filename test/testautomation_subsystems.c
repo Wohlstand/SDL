@@ -40,7 +40,7 @@ static void subsystemsTearDown(void *arg)
  * \sa SDL_QuitSubSystem
  *
  */
-static int subsystems_referenceCount()
+static int subsystems_referenceCount(void)
 {
     const int system = SDL_INIT_VIDEO;
     int result;
@@ -90,7 +90,7 @@ static int subsystems_referenceCount()
  * \sa SDL_QuitSubSystem
  *
  */
-static int subsystems_dependRefCountInitAllQuitByOne()
+static int subsystems_dependRefCountInitAllQuitByOne(void)
 {
     int result;
     /* Ensure that we start with reset subsystems. */
@@ -100,6 +100,8 @@ static int subsystems_dependRefCountInitAllQuitByOne()
     /* Following should init SDL_INIT_EVENTS and give it +3 ref counts. */
     SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK);
     SDLTest_AssertPass("Call to SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK)");
+    result = SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK);
+    SDLTest_AssertCheck(result == (SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK), "Check result from SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK), expected: 0x%x, got: 0x%x", (SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK), result);
     result = SDL_WasInit(SDL_INIT_EVENTS);
     SDLTest_AssertCheck(result == SDL_INIT_EVENTS, "Check result from SDL_WasInit(SDL_INIT_EVENTS), expected: 0x4000, got: 0x%x", result);
 
@@ -128,7 +130,7 @@ static int subsystems_dependRefCountInitAllQuitByOne()
  * \sa SDL_QuitSubSystem
  *
  */
-static int subsystems_dependRefCountInitByOneQuitAll()
+static int subsystems_dependRefCountInitByOneQuitAll(void)
 {
     int result;
     /* Ensure that we start with reset subsystems. */
@@ -163,7 +165,7 @@ static int subsystems_dependRefCountInitByOneQuitAll()
  * \sa SDL_QuitSubSystem
  *
  */
-static int subsystems_dependRefCountWithExtraInit()
+static int subsystems_dependRefCountWithExtraInit(void)
 {
     int result;
     /* Ensure that we start with reset subsystems. */
@@ -206,6 +208,42 @@ static int subsystems_dependRefCountWithExtraInit()
     return TEST_COMPLETED;
 }
 
+
+/**
+ * \brief Inits and Quits timers subsystem, which cannot be explicitly initialized in SDL3
+ *
+ * \sa SDL_InitSubSystem
+ * \sa SDL_QuitSubSystem
+ *
+ */
+static int subsystems_timersSubsystem(void)
+{
+    int result;
+    /* Ensure that we start with reset subsystems. */
+    SDLTest_AssertCheck(SDL_WasInit(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_EVENTS) == 0,
+                        "Check result from SDL_WasInit(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_EVENTS)");
+
+    SDLTest_AssertPass("About to call SDL_WasInit(0)");
+    result = SDL_WasInit(0);
+    SDLTest_AssertCheck(result == 0, "SDL_WasInit(0) should return 0, actual 0x%x", result);
+
+    SDLTest_AssertPass("About to call SDL_InitSubSystem(SDL_INIT_TIMER)");
+    result = SDL_InitSubSystem(SDL_INIT_TIMER);
+    SDLTest_AssertCheck(result == 0, "Must return 0, actually %d", result);
+    SDLTest_AssertPass("About to call SDL_WasInit(SDL_INIT_TIMER)");
+    result = SDL_WasInit(SDL_INIT_TIMER);
+    SDLTest_AssertCheck(result == SDL_INIT_TIMER, "Must return SDL_INIT_TIMER (=%d), actually %d", SDL_INIT_TIMER, result);
+    SDLTest_AssertPass("About to call SDL_WasInit(0)");
+    result = SDL_WasInit(0);
+    SDLTest_AssertCheck(result == SDL_INIT_TIMER, "SDL_WasInit(0) should return SDL_INIT_TIMER, actual 0x%x", result);
+
+    SDLTest_AssertPass("About to call SDL_QuitSubSystem(SDL_INIT_TIMER)");
+    SDL_QuitSubSystem(SDL_INIT_TIMER);
+    SDLTest_AssertPass("SDL_QuitSubSystem finished");
+
+    return TEST_COMPLETED;
+}
+
 /* ================= Test References ================== */
 
 /* Subsystems test cases */
@@ -225,9 +263,13 @@ static const SDLTest_TestCaseReference subsystemsTest4 = {
     (SDLTest_TestCaseFp)subsystems_dependRefCountWithExtraInit, "subsystems_dependRefCountWithExtraInit", "Check reference count of subsystem dependencies.", TEST_ENABLED
 };
 
+static const SDLTest_TestCaseReference subsystemsTest5 = {
+    (SDLTest_TestCaseFp)subsystems_timersSubsystem, "subsystems_timersSubsystem", "Check timer subsystem, removed in SDL3.", TEST_ENABLED
+};
+
 /* Sequence of Events test cases */
 static const SDLTest_TestCaseReference *subsystemsTests[] = {
-    &subsystemsTest1, &subsystemsTest2, &subsystemsTest3, &subsystemsTest4, NULL
+    &subsystemsTest1, &subsystemsTest2, &subsystemsTest3, &subsystemsTest4, &subsystemsTest5, NULL
 };
 
 /* Events test suite (global) */

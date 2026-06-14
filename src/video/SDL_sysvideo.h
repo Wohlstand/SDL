@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -24,6 +24,7 @@
 #define SDL_sysvideo_h_
 
 #include "SDL_messagebox.h"
+#include "SDL_mouse.h"
 #include "SDL_shape.h"
 #include "SDL_thread.h"
 #include "SDL_metal.h"
@@ -154,6 +155,7 @@ typedef enum
 {
     VIDEO_DEVICE_QUIRK_DISABLE_DISPLAY_MODE_SWITCHING = 0x01,
     VIDEO_DEVICE_QUIRK_DISABLE_UNSET_FULLSCREEN_ON_MINIMIZE = 0x02,
+    VIDEO_DEVICE_QUIRK_FULLSCREEN_ONLY = 0x04,
 } DeviceQuirkFlags;
 
 struct SDL_VideoDevice
@@ -353,8 +355,7 @@ struct SDL_VideoDevice
     SDL_bool checked_texture_framebuffer;
     SDL_bool is_dummy;
     SDL_bool suspend_screensaver;
-    SDL_Window *wakeup_window;
-    SDL_mutex *wakeup_lock; /* Initialized only if WaitEventTimeout/SendWakeupEvent are supported */
+    void *wakeup_window;
     int num_displays;
     SDL_VideoDisplay *displays;
     SDL_Window *windows;
@@ -398,6 +399,7 @@ struct SDL_VideoDevice
         int no_error;
         int retained_backing;
         int driver_loaded;
+        int HAS_GL_ARB_color_buffer_float;
         char driver_path[256];
         void *dll_handle;
     } gl_config;
@@ -510,6 +512,7 @@ extern void SDL_OnWindowShown(SDL_Window *window);
 extern void SDL_OnWindowHidden(SDL_Window *window);
 extern void SDL_OnWindowMoved(SDL_Window *window);
 extern void SDL_OnWindowResized(SDL_Window *window);
+extern void SDL_OnWindowLiveResizeUpdate(SDL_Window *window);
 extern void SDL_OnWindowMinimized(SDL_Window *window);
 extern void SDL_OnWindowRestored(SDL_Window *window);
 extern void SDL_OnWindowEnter(SDL_Window *window);
@@ -528,6 +531,10 @@ extern void SDL_ToggleDragAndDropSupport(void);
 extern int SDL_GetPointDisplayIndex(const SDL_Point *point);
 
 extern int SDL_GL_SwapWindowWithResult(SDL_Window *window);
+
+#if defined(SDL_VIDEO_DRIVER_X11) || defined(SDL_VIDEO_DRIVER_WAYLAND) || defined(SDL_VIDEO_DRIVER_EMSCRIPTEN)
+const char *SDL_GetCSSCursorName(SDL_SystemCursor id, const char **fallback_name);
+#endif
 
 #endif /* SDL_sysvideo_h_ */
 

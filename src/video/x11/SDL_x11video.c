@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -50,7 +50,7 @@ static int X11_VideoInit(_THIS);
 static void X11_VideoQuit(_THIS);
 
 /* Find out what class name we should use */
-static char *get_classname()
+static char *get_classname(void)
 {
     char *spot;
 #if defined(__LINUX__) || defined(__FREEBSD__)
@@ -108,9 +108,6 @@ static void X11_DeleteDevice(SDL_VideoDevice *device)
         X11_XCloseDisplay(data->request_display);
     }
     SDL_free(data->windowlist);
-    if (device->wakeup_lock) {
-        SDL_DestroyMutex(device->wakeup_lock);
-    }
     SDL_free(device->driverdata);
     SDL_free(device);
 
@@ -143,6 +140,12 @@ static int X11_SafetyNetErrHandler(Display *d, XErrorEvent *e)
     }
 
     return 0;
+}
+
+static SDL_bool X11_IsXWayland(Display *d)
+{
+    int opcode, event, error;
+    return X11_XQueryExtension(d, "XWAYLAND", &opcode, &event, &error) == True;
 }
 
 static SDL_VideoDevice *X11_CreateDevice(void)
@@ -197,8 +200,6 @@ static SDL_VideoDevice *X11_CreateDevice(void)
         SDL_X11_UnloadSymbols();
         return NULL;
     }
-
-    device->wakeup_lock = SDL_CreateMutex();
 
 #ifdef X11_DEBUG
     X11_XSynchronize(data->display, True);
@@ -321,6 +322,8 @@ static SDL_VideoDevice *X11_CreateDevice(void)
     device->Vulkan_GetInstanceExtensions = X11_Vulkan_GetInstanceExtensions;
     device->Vulkan_CreateSurface = X11_Vulkan_CreateSurface;
 #endif
+
+    data->is_xwayland = X11_IsXWayland(x11_display);
 
     return device;
 }

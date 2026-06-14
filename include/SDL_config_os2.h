@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -114,9 +114,6 @@
 #define HAVE_MEMCPY 1
 #define HAVE_MEMMOVE 1
 #define HAVE_MEMCMP 1
-#define HAVE_WCSLEN 1
-#define HAVE_WCSLCPY 1
-#define HAVE_WCSLCAT 1
 #define HAVE_WCSCMP 1
 #define HAVE__WCSICMP 1
 #define HAVE__WCSNICMP 1

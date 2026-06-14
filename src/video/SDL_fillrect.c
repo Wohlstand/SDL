@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -63,6 +63,13 @@ static void SDL_FillRect##bpp##SSE(Uint8 *pixels, int pitch, Uint32 color, int w
     Uint8 *p = NULL; \
  \
     SSE_BEGIN; \
+ \
+    /* If the number of bytes per row is equal to the pitch, treat */ \
+    /* all rows as one long continuous row (for better performance) */ \
+    if ((w) * (bpp) == pitch) { \
+        w = w * h; \
+        h = 1; \
+    } \
  \
     while (h--) { \
         n = w * bpp; \
@@ -127,6 +134,61 @@ DEFINE_SSE_FILLRECT(4, Uint32)
 
 /* *INDENT-ON* */ /* clang-format on */
 #endif            /* __SSE__ */
+
+#if defined(__loongarch_sx)
+
+#define LSX_BEGIN __m128i c128 = __lsx_vreplgr2vr_w(color);
+
+#define LSX_WORK \
+    for (i = n / 64; i--;) { \
+        __lsx_vst(c128, p, 0); \
+        __lsx_vst(c128, p, 16); \
+        __lsx_vst(c128, p, 32); \
+        __lsx_vst(c128, p, 48); \
+        p += 64; \
+    }
+
+#define DEFINE_LSX_FILLRECT(bpp, type) \
+static void \
+SDL_FillRect##bpp##LSX(Uint8 *pixels, int pitch, Uint32 color, int w, int h) \
+{ \
+    int i, n; \
+    Uint8 *p = NULL; \
+ \
+    LSX_BEGIN; \
+ \
+    while (h--) { \
+        n = w * bpp; \
+        p = pixels; \
+ \
+        if (n > 63) { \
+            int adjust = 16 - ((uintptr_t)p & 15); \
+            if (adjust < 16) { \
+                n -= adjust; \
+                adjust /= bpp; \
+                while (adjust--) { \
+                    *((type *)p) = (type)color; \
+                    p += bpp; \
+                } \
+            } \
+            LSX_WORK; \
+        } \
+        if (n & 63) { \
+            int remainder = (n & 63); \
+            remainder /= bpp; \
+            while (remainder--) { \
+                *((type *)p) = (type)color; \
+                p += bpp; \
+            } \
+        } \
+        pixels += pitch; \
+    } \
+ \
+}
+
+DEFINE_LSX_FILLRECT(4, Uint32)
+
+#endif
 
 static void SDL_FillRect1(Uint8 *pixels, int pitch, Uint32 color, int w, int h)
 {
@@ -415,6 +477,13 @@ int SDL_FillRects(SDL_Surface *dst, const SDL_Rect *rects, int count,
                 fill_function = SDL_FillRect4SSE;
                 break;
             }
+#endif
+
+#ifdef __loongarch_sx
+                if (SDL_HasLSX()) {
+                    fill_function = SDL_FillRect4LSX;
+                    break;
+                }
 #endif
             fill_function = SDL_FillRect4;
             break;

@@ -193,7 +193,7 @@ public class HIDDeviceManager {
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         filter.addAction(HIDDeviceManager.ACTION_USB_PERMISSION);
-        mContext.registerReceiver(mUsbBroadcast, filter);
+        registerReceiverCompat(mUsbBroadcast, filter);
 
         for (UsbDevice usbDevice : mUsbManager.getDeviceList().values()) {
             handleUsbDeviceAttached(usbDevice);
@@ -277,6 +277,7 @@ public class HIDDeviceManager {
             0x044f, // Thrustmaster
             0x045e, // Microsoft
             0x0738, // Mad Catz
+            0x0b05, // ASUS
             0x0e6f, // PDP
             0x0f0d, // Hori
             0x10f5, // Turtle Beach
@@ -403,7 +404,7 @@ public class HIDDeviceManager {
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
         filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-        mContext.registerReceiver(mBluetoothBroadcast, filter);
+        registerReceiverCompat(mBluetoothBroadcast, filter);
 
         if (mIsChromebook) {
             mHandler = new Handler(Looper.getMainLooper());
@@ -424,6 +425,14 @@ public class HIDDeviceManager {
             mContext.unregisterReceiver(mBluetoothBroadcast);
         } catch (Exception e) {
             // We may not have registered, that's okay
+        }
+    }
+
+    private void registerReceiverCompat(BroadcastReceiver receiver, IntentFilter filter) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            mContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            mContext.registerReceiver(receiver, filter);
         }
     }
 
@@ -590,7 +599,13 @@ public class HIDDeviceManager {
                 } else {
                     flags = 0;
                 }
-                mUsbManager.requestPermission(usbDevice, PendingIntent.getBroadcast(mContext, 0, new Intent(HIDDeviceManager.ACTION_USB_PERMISSION), flags));
+                if (Build.VERSION.SDK_INT >= 33 /* Android 14.0 (U) */) {
+                   Intent intent = new Intent(HIDDeviceManager.ACTION_USB_PERMISSION);
+                   intent.setPackage(mContext.getPackageName());
+                   mUsbManager.requestPermission(usbDevice, PendingIntent.getBroadcast(mContext, 0, intent, flags));
+               } else {
+                   mUsbManager.requestPermission(usbDevice, PendingIntent.getBroadcast(mContext, 0, new Intent(HIDDeviceManager.ACTION_USB_PERMISSION), flags));
+               }
             } catch (Exception e) {
                 Log.v(TAG, "Couldn't request permission for USB device " + usbDevice);
                 HIDDeviceOpenResult(deviceID, false);

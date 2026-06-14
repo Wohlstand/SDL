@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -154,6 +154,8 @@ typedef struct SDL_joylist_item
 {
     SDL_JoystickID device_instance;
     char *path; /* "/dev/input/event2" or whatever */
+    Uint16 vendor;
+    Uint16 product;
     char *name; /* "SideWinder 3D Pro" or whatever */
     SDL_JoystickGUID guid;
     dev_t devnum;
@@ -273,7 +275,7 @@ static int GuessIsSensor(int fd)
     return 0;
 }
 
-static int IsJoystick(const char *path, int fd, char **name_return, Uint16 *vendor_return, Uint16 *product_return, SDL_JoystickGUID *guid)
+static int IsJoystick(const char *path, int *fd, char **name_return, Uint16 *vendor_return, Uint16 *product_return, SDL_JoystickGUID *guid)
 {
     struct input_id inpid;
     char *name;
@@ -282,21 +284,32 @@ static int IsJoystick(const char *path, int fd, char **name_return, Uint16 *vend
 
     SDL_zero(inpid);
 #ifdef SDL_USE_LIBUDEV
-    SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version, &class);
+    /* Opening input devices can generate synchronous device I/O, so avoid it if we can */
+    if (SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version, &class) &&
+        !(class & SDL_UDEV_DEVICE_JOYSTICK)) {
+        return 0;
+    }
 #endif
-    if (ioctl(fd, JSIOCGNAME(sizeof(product_string)), product_string) <= 0) {
-        /* When udev is enabled we only get joystick devices here, so there's no need to test them */
-        if (enumeration_method != ENUMERATION_LIBUDEV &&
-            !(class & SDL_UDEV_DEVICE_JOYSTICK) && ( class || !GuessIsJoystick(fd))) {
+
+    if (fd && *fd < 0) {
+        *fd = open(path, O_RDONLY | O_CLOEXEC, 0);
+    }
+    if (!fd || *fd < 0) {
+        return 0;
+    }
+
+    if (ioctl(*fd, JSIOCGNAME(sizeof(product_string)), product_string) <= 0) {
+        /* When udev enumeration or classification, we only got joysticks here, so no need to test */
+        if (enumeration_method != ENUMERATION_LIBUDEV && !class && !GuessIsJoystick(*fd)) {
             return 0;
         }
 
         /* Could have vendor and product already from udev, but should agree with evdev */
-        if (ioctl(fd, EVIOCGID, &inpid) < 0) {
+        if (ioctl(*fd, EVIOCGID, &inpid) < 0) {
             return 0;
         }
 
-        if (ioctl(fd, EVIOCGNAME(sizeof(product_string)), product_string) < 0) {
+        if (ioctl(*fd, EVIOCGNAME(sizeof(product_string)), product_string) < 0) {
             return 0;
         }
     }
@@ -315,7 +328,7 @@ static int IsJoystick(const char *path, int fd, char **name_return, Uint16 *vend
     }
 #endif
 
-    FixupDeviceInfoForMapping(fd, &inpid);
+    FixupDeviceInfoForMapping(*fd, &inpid);
 
 #ifdef DEBUG_JOYSTICK
     SDL_Log("Joystick: %s, bustype = %d, vendor = 0x%.4x, product = 0x%.4x, version = %d\n", name, inpid.bustype, inpid.vendor, inpid.product, inpid.version);
@@ -333,11 +346,32 @@ static int IsJoystick(const char *path, int fd, char **name_return, Uint16 *vend
     return 1;
 }
 
-static int IsSensor(const char *path, int fd)
+static int IsSensor(const char *path, int *fd)
 {
     struct input_id inpid;
+    int class = 0;
 
-    if (ioctl(fd, EVIOCGID, &inpid) < 0) {
+    SDL_zero(inpid);
+#ifdef SDL_USE_LIBUDEV
+    /* Opening input devices can generate synchronous device I/O, so avoid it if we can */
+    if (SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version, &class) &&
+        !(class & SDL_UDEV_DEVICE_ACCELEROMETER)) {
+        return 0;
+    }
+#endif
+
+    if (fd && *fd < 0) {
+        *fd = open(path, O_RDONLY | O_CLOEXEC, 0);
+    }
+    if (!fd || *fd < 0) {
+        return 0;
+    }
+
+    if (!class && !GuessIsSensor(*fd)) {
+        return 0;
+    }
+
+    if (ioctl(*fd, EVIOCGID, &inpid) < 0) {
         return 0;
     }
 
@@ -347,7 +381,7 @@ static int IsSensor(const char *path, int fd)
         return 0;
     }
 
-    return GuessIsSensor(fd);
+    return 1;
 }
 
 #ifdef SDL_USE_LIBUDEV
@@ -434,16 +468,11 @@ static void MaybeAddDevice(const char *path)
         }
     }
 
-    fd = open(path, O_RDONLY | O_CLOEXEC, 0);
-    if (fd < 0) {
-        goto done;
-    }
-
 #ifdef DEBUG_INPUT_EVENTS
     SDL_Log("Checking %s\n", path);
 #endif
 
-    if (IsJoystick(path, fd, &name, &vendor, &product, &guid)) {
+    if (IsJoystick(path, &fd, &name, &vendor, &product, &guid)) {
 #ifdef DEBUG_INPUT_EVENTS
         SDL_Log("found joystick: %s\n", path);
 #endif
@@ -456,6 +485,8 @@ static void MaybeAddDevice(const char *path)
         item->devnum = sb.st_rdev;
         item->steam_virtual_gamepad_slot = -1;
         item->path = SDL_strdup(path);
+        item->vendor = vendor;
+        item->product = product;
         item->name = name;
         item->guid = guid;
 
@@ -484,7 +515,7 @@ static void MaybeAddDevice(const char *path)
         goto done;
     }
 
-    if (IsSensor(path, fd)) {
+    if (IsSensor(path, &fd)) {
 #ifdef DEBUG_INPUT_EVENTS
         SDL_Log("found sensor: %s\n", path);
 #endif
@@ -880,11 +911,24 @@ static void LINUX_ScanSteamVirtualGamepads(void)
     int num_virtual_gamepads = 0;
     int virtual_gamepad_slot;
     VirtualGamepadEntry *virtual_gamepads = NULL;
+#ifdef SDL_USE_LIBUDEV
+    int class;
+#endif
 
     count = scandir("/dev/input", &entries, filter_entries, NULL);
     for (i = 0; i < count; ++i) {
         (void)SDL_snprintf(path, SDL_arraysize(path), "/dev/input/%s", entries[i]->d_name);
 
+#ifdef SDL_USE_LIBUDEV
+        /* Opening input devices can generate synchronous device I/O, so avoid it if we can */
+        class = 0;
+        SDL_zero(inpid);
+        if (SDL_UDEV_GetProductInfo(path, &inpid.vendor, &inpid.product, &inpid.version, &class) &&
+            (inpid.vendor != USB_VENDOR_VALVE || inpid.product != USB_PRODUCT_STEAM_VIRTUAL_GAMEPAD)) {
+            free(entries[i]); /* This should NOT be SDL_free() */
+            continue;
+        }
+#endif
         fd = open(path, O_RDONLY | O_CLOEXEC, 0);
         if (fd >= 0) {
             if (ioctl(fd, EVIOCGID, &inpid) == 0 &&
@@ -986,6 +1030,9 @@ static void LINUX_JoystickDetect(void)
 static int LINUX_JoystickInit(void)
 {
     const char *devices = SDL_GetHint(SDL_HINT_JOYSTICK_DEVICE);
+#ifdef SDL_USE_LIBUDEV
+    int udev_status = SDL_UDEV_Init();
+#endif
 
     SDL_classic_joysticks = SDL_GetHintBoolean(SDL_HINT_LINUX_JOYSTICK_CLASSIC, SDL_FALSE);
 
@@ -1036,21 +1083,24 @@ static int LINUX_JoystickInit(void)
     }
 
     if (enumeration_method == ENUMERATION_LIBUDEV) {
-        if (SDL_UDEV_Init() < 0) {
-            return SDL_SetError("Could not initialize UDEV");
-        }
+        if (udev_status == 0) {
+            /* Set up the udev callback */
+            if (SDL_UDEV_AddCallback(joystick_udev_callback) < 0) {
+                SDL_UDEV_Quit();
+                return SDL_SetError("Could not set up joystick <-> udev callback");
+            }
 
-        /* Set up the udev callback */
-        if (SDL_UDEV_AddCallback(joystick_udev_callback) < 0) {
-            SDL_UDEV_Quit();
-            return SDL_SetError("Could not set up joystick <-> udev callback");
+            /* Force a scan to build the initial device list */
+            SDL_UDEV_Scan();
+        } else {
+            SDL_LogDebug(SDL_LOG_CATEGORY_INPUT,
+                         "udev init failed, disabling udev integration");
+            enumeration_method = ENUMERATION_FALLBACK;
         }
-
-        /* Force a scan to build the initial device list */
-        SDL_UDEV_Scan();
-    } else
+    }
 #endif
-    {
+
+    if (enumeration_method != ENUMERATION_LIBUDEV) {
 #if defined(HAVE_INOTIFY)
         inotify_fd = SDL_inotify_init1();
 
@@ -1886,6 +1936,20 @@ static void PollAllValues(SDL_Joystick *joystick)
     /* Joyballs are relative input, so there's no poll state. Events only! */
 }
 
+static void CorrectSensorData(struct joystick_hwdata *hwdata, float *values, float *data)
+{
+    if (hwdata->item->vendor == USB_VENDOR_NINTENDO) {
+        // The Nintendo driver uses a different axis order than SDL
+        data[0] = -values[1];
+        data[1] = values[2];
+        data[2] = -values[0];
+    } else {
+        data[0] = values[0];
+        data[1] = values[1];
+        data[2] = values[2];
+    }
+}
+
 static void PollAllSensors(SDL_Joystick *joystick)
 {
     struct input_absinfo absinfo;
@@ -1896,27 +1960,31 @@ static void PollAllSensors(SDL_Joystick *joystick)
     SDL_assert(joystick->hwdata->fd_sensor >= 0);
 
     if (joystick->hwdata->has_gyro) {
-        float data[3] = {0.0f, 0.0f, 0.0f};
+        float values[3] = {0.0f, 0.0f, 0.0f};
+        float data[3];
         for (i = 0; i < 3; i++) {
             if (ioctl(joystick->hwdata->fd_sensor, EVIOCGABS(ABS_RX + i), &absinfo) >= 0) {
-                data[i] = absinfo.value * (M_PI / 180.f) / joystick->hwdata->gyro_scale[i];
+                values[i] = absinfo.value * (M_PI / 180.f) / joystick->hwdata->gyro_scale[i];
 #ifdef DEBUG_INPUT_EVENTS
                 SDL_Log("Joystick : Re-read Gyro (axis %d) val= %f\n", i, data[i]);
 #endif
             }
         }
+        CorrectSensorData(joystick->hwdata, values, data);
         SDL_PrivateJoystickSensor(joystick, SDL_SENSOR_GYRO, joystick->hwdata->sensor_tick, data, 3);
     }
     if (joystick->hwdata->has_accelerometer) {
-        float data[3] = {0.0f, 0.0f, 0.0f};
+        float values[3] = {0.0f, 0.0f, 0.0f};
+        float data[3];
         for (i = 0; i < 3; i++) {
             if (ioctl(joystick->hwdata->fd_sensor, EVIOCGABS(ABS_X + i), &absinfo) >= 0) {
-                data[i] = absinfo.value * SDL_STANDARD_GRAVITY / joystick->hwdata->accelerometer_scale[i];
+                values[i] = absinfo.value * SDL_STANDARD_GRAVITY / joystick->hwdata->accelerometer_scale[i];
 #ifdef DEBUG_INPUT_EVENTS
                 SDL_Log("Joystick : Re-read Accelerometer (axis %d) val= %f\n", i, data[i]);
 #endif
             }
         }
+        CorrectSensorData(joystick->hwdata, values, data);
         SDL_PrivateJoystickSensor(joystick, SDL_SENSOR_ACCEL, joystick->hwdata->sensor_tick, data, 3);
     }
 }
@@ -2086,12 +2154,15 @@ static void HandleInputEvents(SDL_Joystick *joystick)
                             joystick->hwdata->recovering_from_dropped_sensor = SDL_FALSE;
                             PollAllSensors(joystick); /* try to sync up to current state now */
                         } else {
+                            float data[3];
+                            CorrectSensorData(joystick->hwdata, joystick->hwdata->gyro_data, data);
                             SDL_PrivateJoystickSensor(joystick, SDL_SENSOR_GYRO,
                                                    joystick->hwdata->sensor_tick,
-                                                   joystick->hwdata->gyro_data, 3);
+                                                   data, 3);
+                            CorrectSensorData(joystick->hwdata, joystick->hwdata->accel_data, data);
                             SDL_PrivateJoystickSensor(joystick, SDL_SENSOR_ACCEL,
                                                    joystick->hwdata->sensor_tick,
-                                                   joystick->hwdata->accel_data, 3);
+                                                   data, 3);
                         }
                         break;
                     default:

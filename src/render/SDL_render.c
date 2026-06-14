@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -29,6 +29,12 @@
 #include "software/SDL_render_sw_c.h"
 #include "../video/SDL_pixels_c.h"
 
+#if defined(__loongarch__)
+#if SDL_VIDEO_OPENGL
+#include "SDL_opengl.h"
+#endif /* SDL_VIDEO_OPENGL */
+#endif
+
 #if defined(__ANDROID__)
 #include "../core/android/SDL_android.h"
 #endif
@@ -47,10 +53,17 @@ this should probably be removed at some point in the future.  --ryan. */
 
 #define SDL_WINDOWRENDERDATA "_SDL_WindowRenderData"
 
-#define CHECK_RENDERER_MAGIC(renderer, retval)             \
+#define CHECK_RENDERER_MAGIC_BUT_NOT_DESTROYED_FLAG(renderer, retval)             \
     if (!renderer || renderer->magic != &renderer_magic) { \
         SDL_InvalidParamError("renderer");                 \
         return retval;                                     \
+    }
+
+#define CHECK_RENDERER_MAGIC(renderer, retval)             \
+    CHECK_RENDERER_MAGIC_BUT_NOT_DESTROYED_FLAG(renderer, retval); \
+    if (renderer->destroyed) { \
+        SDL_SetError("Renderer's window has been destroyed, can't use further"); \
+        return retval;                                          \
     }
 
 #define CHECK_TEXTURE_MAGIC(texture, retval)            \
@@ -91,37 +104,37 @@ this should probably be removed at some point in the future.  --ryan. */
 
 #ifndef SDL_RENDER_DISABLED
 static const SDL_RenderDriver *render_drivers[] = {
-#ifdef SDL_VIDEO_RENDER_D3D
+#if SDL_VIDEO_RENDER_D3D
     &D3D_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_D3D11
+#if SDL_VIDEO_RENDER_D3D11
     &D3D11_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_D3D12
+#if SDL_VIDEO_RENDER_D3D12
     &D3D12_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_METAL
+#if SDL_VIDEO_RENDER_METAL
     &METAL_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_OGL
+#if SDL_VIDEO_RENDER_OGL
     &GL_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_OGL_ES2
+#if SDL_VIDEO_RENDER_OGL_ES2
     &GLES2_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_OGL_ES
+#if SDL_VIDEO_RENDER_OGL_ES
     &GLES_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_DIRECTFB
+#if SDL_VIDEO_RENDER_DIRECTFB
     &DirectFB_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_PS2
+#if SDL_VIDEO_RENDER_PS2
     &PS2_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_PSP
+#if SDL_VIDEO_RENDER_PSP
     &PSP_RenderDriver,
 #endif
-#ifdef SDL_VIDEO_RENDER_VITA_GXM
+#if SDL_VIDEO_RENDER_VITA_GXM
     &VITA_GXM_RenderDriver,
 #endif
 #if SDL_VIDEO_RENDER_SW
@@ -799,6 +812,20 @@ static int SDLCALL SDL_RendererEventWatch(void *userdata, SDL_Event *event)
                 event->button.y = (int)(event->button.y / (scale.y * renderer->dpi_scale.y));
             }
         }
+    } else if (event->type == SDL_MOUSEWHEEL) {
+        SDL_Window *window = SDL_GetWindowFromID(event->wheel.windowID);
+        if (window == renderer->window) {
+            int logical_w, logical_h;
+            SDL_DRect viewport;
+            SDL_FPoint scale;
+            GetWindowViewportValues(renderer, &logical_w, &logical_h, &viewport, &scale);
+            if (logical_w) {
+                event->wheel.mouseX -= (int)(viewport.x * renderer->dpi_scale.x);
+                event->wheel.mouseY -= (int)(viewport.y * renderer->dpi_scale.y);
+                event->wheel.mouseX = (int)(event->wheel.mouseX / (scale.x * renderer->dpi_scale.x));
+                event->wheel.mouseY = (int)(event->wheel.mouseY / (scale.y * renderer->dpi_scale.y));
+            }
+        }
     } else if (event->type == SDL_FINGERDOWN ||
                event->type == SDL_FINGERUP ||
                event->type == SDL_FINGERMOTION) {
@@ -933,6 +960,34 @@ static void SDL_CalculateSimulatedVSyncInterval(SDL_Renderer *renderer, SDL_Wind
 }
 #endif /* !SDL_RENDER_DISABLED */
 
+#if defined(__loongarch__)
+static SDL_bool SDL_CheckIntegratedGraphics()
+{
+     SDL_Window *window = SDL_CreateWindow("OpenGL test", -32, -32, 32, 32,
+                                           SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+     SDL_bool has_lg100_or_lg110 = SDL_FALSE;
+
+     if (window) {
+        SDL_GLContext context = SDL_GL_CreateContext(window);
+
+        if (context) {
+            const GLubyte *(APIENTRY *glGetStringFunc)(GLenum) =
+                SDL_GL_GetProcAddress("glGetString");
+            if (glGetStringFunc) {
+                const char *renderer = (const char*)glGetStringFunc(GL_RENDERER);
+                if (renderer && (SDL_strstr(renderer, "LG110") ||
+                    SDL_strstr(renderer, "LG100"))) {
+                    has_lg100_or_lg110 = SDL_TRUE;
+                }
+            }
+            SDL_GL_DeleteContext(context);
+        }
+        SDL_DestroyWindow(window);
+    }
+    return has_lg100_or_lg110;
+}
+#endif
+
 SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
 {
 #ifndef SDL_RENDER_DISABLED
@@ -940,9 +995,18 @@ SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
     int n = SDL_GetNumRenderDrivers();
     SDL_bool batching = SDL_TRUE;
     const char *hint;
+    int rc = -1;
 
 #if defined(__ANDROID__)
     Android_ActivityMutex_Lock_Running();
+#endif
+
+/* CPU acceleration runs faster than integrated graphics on Loongson at present. */
+#if defined(__linux__) && defined(__loongarch__)
+    if (SDL_CheckIntegratedGraphics()) {
+        SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0");
+        flags = SDL_RENDERER_SOFTWARE;
+    }
 #endif
 
     if (!window) {
@@ -959,6 +1023,14 @@ SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
         SDL_SetError("Renderer already associated with window");
         goto error;
     }
+
+    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
+    if (!renderer) {
+        SDL_OutOfMemory();
+        goto error;
+    }
+
+    renderer->magic = &renderer_magic;
 
     hint = SDL_GetHint(SDL_HINT_RENDER_VSYNC);
     if (hint && *hint) {
@@ -977,30 +1049,36 @@ SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
 
                 if (SDL_strcasecmp(hint, driver->info.name) == 0) {
                     /* Create a new renderer instance */
-                    renderer = driver->CreateRenderer(window, flags);
-                    if (renderer) {
+                    rc = driver->CreateRenderer(renderer, window, flags);
+                    if (rc == 0) {
                         batching = SDL_FALSE;
+                    } else {
+                        SDL_zerop(renderer);  /* make sure we don't leave function pointers from a previous CreateRenderer() in this struct. */
+                        renderer->magic = &renderer_magic;
                     }
                     break;
                 }
             }
         }
 
-        if (!renderer) {
+        if (rc == -1) {
             for (index = 0; index < n; ++index) {
                 const SDL_RenderDriver *driver = render_drivers[index];
 
                 if ((driver->info.flags & flags) == flags) {
                     /* Create a new renderer instance */
-                    renderer = driver->CreateRenderer(window, flags);
-                    if (renderer) {
+                    rc = driver->CreateRenderer(renderer, window, flags);
+                    if (rc == 0) {
                         /* Yay, we got one! */
                         break;
+                    } else {
+                        SDL_zerop(renderer);  /* make sure we don't leave function pointers from a previous CreateRenderer() in this struct. */
+                        renderer->magic = &renderer_magic;
                     }
                 }
             }
         }
-        if (!renderer) {
+        if (rc == -1) {
             SDL_SetError("Couldn't find matching render driver");
             goto error;
         }
@@ -1011,9 +1089,9 @@ SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
             goto error;
         }
         /* Create a new renderer instance */
-        renderer = render_drivers[index]->CreateRenderer(window, flags);
+        rc = render_drivers[index]->CreateRenderer(renderer, window, flags);
         batching = SDL_FALSE;
-        if (!renderer) {
+        if (rc == -1) {
             goto error;
         }
     }
@@ -1094,6 +1172,7 @@ SDL_Renderer *SDL_CreateRenderer(SDL_Window *window, int index, Uint32 flags)
     return renderer;
 
 error:
+    SDL_free(renderer);
 
 #if defined(__ANDROID__)
     Android_ActivityMutex_Unlock();
@@ -1108,14 +1187,25 @@ error:
 
 SDL_Renderer *SDL_CreateSoftwareRenderer(SDL_Surface *surface)
 {
-#if !defined(SDL_RENDER_DISABLED) && SDL_VIDEO_RENDER_SW
+#if SDL_VIDEO_RENDER_SW
     SDL_Renderer *renderer;
+    int rc;
 
-    renderer = SW_CreateRendererForSurface(surface);
+    renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
+    if (!renderer) {
+        SDL_OutOfMemory();
+        return NULL;
+    }
 
-    if (renderer) {
+    renderer->magic = &renderer_magic;
+
+    rc = SW_CreateRendererForSurface(renderer, surface);
+
+    if (rc == -1) {
+        SDL_free(renderer);
+        renderer = NULL;
+    } else {
         VerifyDrawQueueFunctions(renderer);
-        renderer->magic = &renderer_magic;
         renderer->target_mutex = SDL_CreateMutex();
         renderer->scale.x = 1.0f;
         renderer->scale.y = 1.0f;
@@ -1451,7 +1541,7 @@ SDL_Texture *SDL_CreateTextureFromSurface(SDL_Renderer *renderer, SDL_Surface *s
             SDL_UpdateTexture(texture, NULL, surface->pixels, surface->pitch);
         }
 
-#ifdef SDL_VIDEO_RENDER_DIRECTFB
+#if SDL_VIDEO_RENDER_DIRECTFB
         /* DirectFB allows palette format for textures.
          * Copy SDL_Surface palette to the texture */
         if (SDL_ISPIXELFORMAT_INDEXED(format)) {
@@ -2284,7 +2374,7 @@ static int UpdateLogicalSize(SDL_Renderer *renderer, SDL_bool flush_viewport_cmd
 
     hint = SDL_GetHint(SDL_HINT_RENDER_LOGICAL_SIZE_MODE);
     if (hint && (*hint == '1' || SDL_strcasecmp(hint, "overscan") == 0)) {
-#ifdef SDL_VIDEO_RENDER_D3D
+#if SDL_VIDEO_RENDER_D3D
         SDL_bool overscan_supported = SDL_TRUE;
         /* Unfortunately, Direct3D 9 doesn't support negative viewport numbers
            which the overscan implementation relies on.
@@ -4304,11 +4394,14 @@ void SDL_DestroyTexture(SDL_Texture *texture)
     SDL_free(texture);
 }
 
-void SDL_DestroyRenderer(SDL_Renderer *renderer)
+void SDL_DestroyRendererWithoutFreeing(SDL_Renderer *renderer)
 {
     SDL_RenderCommand *cmd;
 
-    CHECK_RENDERER_MAGIC(renderer, );
+    SDL_assert(renderer != NULL);
+    SDL_assert(!renderer->destroyed);
+
+    renderer->destroyed = SDL_TRUE;
 
     SDL_DelEventWatch(SDL_RendererEventWatch, renderer);
 
@@ -4343,9 +4436,6 @@ void SDL_DestroyRenderer(SDL_Renderer *renderer)
         SDL_SetWindowData(renderer->window, SDL_WINDOWRENDERDATA, NULL);
     }
 
-    /* It's no longer magical... */
-    renderer->magic = NULL;
-
     /* Free the target mutex */
     SDL_DestroyMutex(renderer->target_mutex);
     renderer->target_mutex = NULL;
@@ -4353,6 +4443,22 @@ void SDL_DestroyRenderer(SDL_Renderer *renderer)
     /* Free the renderer instance */
     renderer->DestroyRenderer(renderer);
 }
+
+void SDL_DestroyRenderer(SDL_Renderer *renderer)
+{
+    CHECK_RENDERER_MAGIC_BUT_NOT_DESTROYED_FLAG(renderer,);
+
+    /* if we've already destroyed the renderer through SDL_DestroyWindow, we just need
+       to free the renderer pointer. This lets apps destroy the window and renderer
+       in either order. */
+    if (!renderer->destroyed) {
+        SDL_DestroyRendererWithoutFreeing(renderer);
+        renderer->magic = NULL;     // It's no longer magical...
+    }
+
+    SDL_free(renderer);
+}
+
 
 int SDL_GL_BindTexture(SDL_Texture *texture, float *texw, float *texh)
 {

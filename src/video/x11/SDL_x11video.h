@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -155,6 +155,8 @@ typedef struct SDL_VideoData
     /* Used to interact with the on-screen keyboard */
     SDL_bool is_steam_deck;
     SDL_bool steam_keyboard_open;
+
+    SDL_bool is_xwayland;
 
 } SDL_VideoData;
 

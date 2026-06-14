@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -855,6 +855,7 @@ int SDL_DINPUT_JoystickOpen(SDL_Joystick *joystick, JoyStick_DeviceData *joystic
     } else if (FAILED(result)) {
         return SetDIerror("IDirectInputDevice8::SetProperty", result);
     }
+    joystick->hwdata->first_update = SDL_TRUE;
 
     /* Poll and wait for initial device state to be populated */
     result = IDirectInputDevice8_Poll(joystick->hwdata->InputDevice);
@@ -1130,7 +1131,14 @@ void SDL_DINPUT_JoystickUpdate(SDL_Joystick *joystick)
         IDirectInputDevice8_Poll(joystick->hwdata->InputDevice);
     }
 
-    if (joystick->hwdata->buffered) {
+    if (joystick->hwdata->first_update) {
+        /* Poll to get the initial state of the joystick */
+        UpdateDINPUTJoystickState_Polled(joystick);
+        joystick->hwdata->first_update = SDL_FALSE;
+        return;
+    }
+
+    if (joystick->hwdata->buffered ) {
         UpdateDINPUTJoystickState_Buffered(joystick);
     } else {
         UpdateDINPUTJoystickState_Polled(joystick);

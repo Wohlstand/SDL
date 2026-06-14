@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -125,7 +125,7 @@ static void SDLCALL SDL_Convert_U8_to_F32_Scalar(SDL_AudioCVT *cvt, SDL_AudioFor
 
 static void SDLCALL SDL_Convert_S16_to_F32_Scalar(SDL_AudioCVT *cvt, SDL_AudioFormat format)
 {
-    const int num_samples = cvt->len_cvt;
+    const int num_samples = cvt->len_cvt / sizeof(Sint16);
     const Sint16 *src = (const Sint16 *)cvt->buf;
     float *dst = (float *)cvt->buf;
     int i;
@@ -350,7 +350,7 @@ static void SDLCALL SDL_Convert_S8_to_F32_SSE2(SDL_AudioCVT *cvt, SDL_AudioForma
         i -= 16;
 
         {
-        const __m128i bytes = _mm_xor_si128(_mm_loadu_si128((const __m128i *)&src[i-16]), flipper);
+        const __m128i bytes = _mm_xor_si128(_mm_loadu_si128((const __m128i *)&src[i]), flipper);
 
         const __m128i shorts1 = _mm_unpacklo_epi8(bytes, zero);
         const __m128i shorts2 = _mm_unpackhi_epi8(bytes, zero);

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -31,7 +31,7 @@
 #include <storage/File.h>
 #include <unistd.h>
 
-#include "SDL_BApp.h"   /* SDL_BLooper class definition */
+#include "SDL_BApp.h"   /* SDL_BHandler class definition */
 #include "SDL_BeApp.h"
 #include "SDL_timer.h"
 #include "SDL_error.h"
@@ -47,7 +47,7 @@ extern "C" {
 /* Flag to tell whether or not the Be application and looper are active or not */
 static int SDL_BeAppActive = 0;
 static SDL_Thread *SDL_AppThread = NULL;
-SDL_BLooper *SDL_Looper = NULL;
+SDL_BHandler *SDL_Handler = NULL;
 
 
 /* Default application signature */
@@ -118,9 +118,13 @@ static int StartBeLooper()
         } while ((!be_app) || be_app->IsLaunching());
     }
 
-     /* Change working directory to that of executable */
+     /* If started from the GUI, change working directory to that of executable.
+      * This matches behavior on other platforms and may be needed by some SDL software.
+      * Don't do it when started from terminal (TERM environment variable is set), because in that
+      * case, the current directory may be important, and after this there will be no way to know
+      * what it was. */
     app_info info;
-    if (B_OK == be_app->GetAppInfo(&info)) {
+    if (NULL == getenv("TERM") && B_OK == be_app->GetAppInfo(&info)) {
         entry_ref ref = info.ref;
         BEntry entry;
         if (B_OK == entry.SetTo(&ref)) {
@@ -133,8 +137,11 @@ static int StartBeLooper()
         }
     }
 
-    SDL_Looper = new SDL_BLooper("SDLLooper");
-    SDL_Looper->Run();
+    SDL_Handler = new SDL_BHandler("SDLHandler");
+    bool locked = be_app->Lock();
+    be_app->AddHandler(SDL_Handler);
+    if (locked)
+        be_app->Unlock();
     return (0);
 }
 
@@ -165,9 +172,6 @@ void SDL_QuitBeApp(void)
 
     /* If the reference count reached zero, clean up the app */
     if (SDL_BeAppActive == 0) {
-        SDL_Looper->Lock();
-        SDL_Looper->Quit();
-        SDL_Looper = NULL;
         if (SDL_AppThread) {
             if (be_app != NULL) {       /* Not tested */
                 be_app->PostMessage(B_QUIT_REQUESTED);
@@ -184,7 +188,7 @@ void SDL_QuitBeApp(void)
 #endif
 
 /* SDL_BApp functions */
-void SDL_BLooper::ClearID(SDL_BWin *bwin) {
+void SDL_BHandler::ClearID(SDL_BWin *bwin) {
     _SetSDLWindow(NULL, bwin->GetID());
     int32 i = _GetNumWindowSlots() - 1;
     while (i >= 0 && GetSDLWindow(i) == NULL) {

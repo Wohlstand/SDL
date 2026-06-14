@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -460,6 +460,17 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
     }
 }
 
+static NSCursor *Cocoa_GetDesiredCursor(void)
+{
+    SDL_Mouse *mouse = SDL_GetMouse();
+
+    if (mouse->cursor_shown && mouse->cur_cursor && !mouse->relative_mode) {
+        return (__bridge NSCursor *)mouse->cur_cursor->driverdata;
+    }
+
+    return [NSCursor invisibleCursor];
+}
+
 
 @implementation Cocoa_WindowListener
 
@@ -479,11 +490,14 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
     isMoving = NO;
     isDragAreaRunning = NO;
     pendingWindowWarpX = pendingWindowWarpY = INT_MAX;
+    liveResizeTimer = nil;
 
     center = [NSNotificationCenter defaultCenter];
 
     if ([window delegate] != nil) {
         [center addObserver:self selector:@selector(windowDidExpose:) name:NSWindowDidExposeNotification object:window];
+        [center addObserver:self selector:@selector(windowWillStartLiveResize:) name:NSWindowWillStartLiveResizeNotification object:window];
+        [center addObserver:self selector:@selector(windowDidEndLiveResize:) name:NSWindowDidEndLiveResizeNotification object:window];
         [center addObserver:self selector:@selector(windowDidMove:) name:NSWindowDidMoveNotification object:window];
         [center addObserver:self selector:@selector(windowDidResize:) name:NSWindowDidResizeNotification object:window];
         [center addObserver:self selector:@selector(windowDidMiniaturize:) name:NSWindowDidMiniaturizeNotification object:window];
@@ -617,6 +631,8 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
 
     if ([window delegate] != self) {
         [center removeObserver:self name:NSWindowDidExposeNotification object:window];
+        [center removeObserver:self name:NSWindowWillStartLiveResizeNotification object:window];
+        [center removeObserver:self name:NSWindowDidEndLiveResizeNotification object:window];
         [center removeObserver:self name:NSWindowDidMoveNotification object:window];
         [center removeObserver:self name:NSWindowDidResizeNotification object:window];
         [center removeObserver:self name:NSWindowDidMiniaturizeNotification object:window];
@@ -727,6 +743,36 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
     SDL_SendWindowEvent(_data.window, SDL_WINDOWEVENT_EXPOSED, 0, 0);
 }
 
+- (void)onLiveResizeTimerFire:(id)sender
+{
+    SDL_OnWindowLiveResizeUpdate(_data.window);
+}
+
+- (void)windowWillStartLiveResize:(NSNotification *)aNotification
+{
+    // We'll try to maintain 60 FPS during live resizing
+    const NSTimeInterval interval = 1.0 / 60.0;
+
+    NSMethodSignature *invocationSig = [Cocoa_WindowListener
+        instanceMethodSignatureForSelector:@selector(onLiveResizeTimerFire:)];
+    NSInvocation *invocation = [NSInvocation
+        invocationWithMethodSignature:invocationSig];
+    [invocation setTarget:self];
+    [invocation setSelector:@selector(onLiveResizeTimerFire:)];
+
+    liveResizeTimer = [NSTimer scheduledTimerWithTimeInterval:interval
+                                                      invocation:invocation
+                                                      repeats:TRUE];
+
+    [[NSRunLoop currentRunLoop] addTimer:liveResizeTimer forMode:NSRunLoopCommonModes];
+}
+
+- (void)windowDidEndLiveResize:(NSNotification *)aNotification
+{
+    [liveResizeTimer invalidate];
+    liveResizeTimer = nil;
+}
+
 - (void)windowWillMove:(NSNotification *)aNotification
 {
     if ([_data.nswindow isKindOfClass:[SDLWindow class]]) {
@@ -808,6 +854,11 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
        or resizing from a corner */
     SDL_SendWindowEvent(window, SDL_WINDOWEVENT_MOVED, x, y);
     SDL_SendWindowEvent(window, SDL_WINDOWEVENT_RESIZED, w, h);
+
+    /* The OS can resize the window automatically if the display density
+       changes while the window is miniaturized or hidden */
+    if (![nswindow isVisible])
+        return;
 
     /* isZoomed always returns true if the window is not resizable */
     if ((window->flags & SDL_WINDOW_RESIZABLE) && [nswindow isZoomed]) {
@@ -922,11 +973,13 @@ static void Cocoa_UpdateClipCursor(SDL_Window * window)
 - (void)windowDidChangeScreen:(NSNotification *)aNotification
 {
     /*printf("WINDOWDIDCHANGESCREEN\n");*/
+#ifdef SDL_VIDEO_OPENGL
     if (_data && _data.nscontexts) {
         for (SDLOpenGLContext *context in _data.nscontexts) {
             [context movedToNewScreen];
         }
     }
+#endif /* SDL_VIDEO_OPENGL */
 }
 
 - (void)windowWillEnterFullScreen:(NSNotification *)aNotification
@@ -1323,6 +1376,7 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
     NSPoint point;
     int x, y;
     SDL_Window *window;
+    NSView *contentView;
 
     if (!mouse) {
         return;
@@ -1330,6 +1384,17 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
 
     mouseID = mouse->mouseID;
     window = _data.window;
+    contentView = _data.sdlContentView;
+    point = [theEvent locationInWindow];
+
+    if ([contentView mouse:[contentView convertPoint:point fromView:nil] inRect:[contentView bounds]] &&
+        [NSCursor currentCursor] != Cocoa_GetDesiredCursor()) {
+        // The wrong cursor is on screen, fix it. This fixes an macOS bug that is only known to
+        // occur in fullscreen windows on the built-in displays of newer MacBooks with camera
+        // notches. When the mouse is moved near the top of such a window (within about 44 units)
+        // and then moved back down, the cursor rects aren't respected.
+        [_data.nswindow invalidateCursorRectsForView:contentView];
+    }
 
     if ([self processHitTest:theEvent]) {
         SDL_SendWindowEvent(window, SDL_WINDOWEVENT_HIT_TEST, 0, 0);
@@ -1340,7 +1405,6 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
         return;
     }
 
-    point = [theEvent locationInWindow];
     x = (int)point.x;
     y = (int)(window->h - point.y);
 
@@ -1590,17 +1654,9 @@ static int Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL
 
 - (void)resetCursorRects
 {
-    SDL_Mouse *mouse;
     [super resetCursorRects];
-    mouse = SDL_GetMouse();
-
-    if (mouse->cursor_shown && mouse->cur_cursor && !mouse->relative_mode) {
-        [self addCursorRect:[self bounds]
-                     cursor:(__bridge NSCursor *)mouse->cur_cursor->driverdata];
-    } else {
-        [self addCursorRect:[self bounds]
-                     cursor:[NSCursor invisibleCursor]];
-    }
+    [self addCursorRect:[self bounds]
+                 cursor:Cocoa_GetDesiredCursor()];
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent
@@ -1758,12 +1814,12 @@ int Cocoa_CreateWindow(_THIS, SDL_Window * window)
     }
 #endif
 
-    if (videodata.allow_spaces) {
+    /* resizable windows are Spaces-friendly: they get the "go fullscreen" toggle button on their titlebar. */
+    if ((window->flags & SDL_WINDOW_RESIZABLE) && videodata.allow_spaces) {
         /* we put FULLSCREEN_DESKTOP windows in their own Space, without a toggle button or menubar, later */
-        if (window->flags & SDL_WINDOW_RESIZABLE) {
-            /* resizable windows are Spaces-friendly: they get the "go fullscreen" toggle button on their titlebar. */
-            [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
-        }
+        [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
+    } else {
+        [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenNone];
     }
 
     if (window->flags & SDL_WINDOW_ALWAYS_ON_TOP) {
@@ -2068,13 +2124,11 @@ void Cocoa_SetWindowResizable(_THIS, SDL_Window * window, SDL_bool resizable)
     if (![listener isInFullscreenSpace]) {
         SetWindowStyle(window, GetWindowStyle(window));
     }
-    if (videodata.allow_spaces) {
-        if (resizable) {
-            /* resizable windows are Spaces-friendly: they get the "go fullscreen" toggle button on their titlebar. */
-            [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
-        } else {
-            [nswindow setCollectionBehavior:NSWindowCollectionBehaviorManaged];
-        }
+    if (resizable && videodata.allow_spaces) {
+        /* resizable windows are Spaces-friendly: they get the "go fullscreen" toggle button on their titlebar. */
+        [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
+    } else {
+        [nswindow setCollectionBehavior:NSWindowCollectionBehaviorFullScreenNone];
     }
 }}
 
@@ -2332,7 +2386,10 @@ void Cocoa_DestroyWindow(_THIS, SDL_Window * window)
     SDL_WindowData *data = (SDL_WindowData *) CFBridgingRelease(window->driverdata);
 
     if (data) {
+#ifdef SDL_VIDEO_OPENGL
         NSArray *contexts;
+#endif
+
         if ([data.listener isInFullscreenSpace]) {
             [NSMenu setMenuBarVisible:YES];
         }
@@ -2344,15 +2401,13 @@ void Cocoa_DestroyWindow(_THIS, SDL_Window * window)
             [data.nswindow close];
         }
 
-        #ifdef SDL_VIDEO_OPENGL
-
+#ifdef SDL_VIDEO_OPENGL
         contexts = [data.nscontexts copy];
         for (SDLOpenGLContext *context in contexts) {
             /* Calling setWindow:NULL causes the context to remove itself from the context list. */
             [context setWindow:NULL];
         }
-
-        #endif /* SDL_VIDEO_OPENGL */
+#endif /* SDL_VIDEO_OPENGL */
 
         if (window->shaper) {
             CFBridgingRelease(window->shaper->driverdata);

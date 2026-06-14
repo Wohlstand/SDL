@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -23,7 +23,7 @@
 #include "SDL_render.h"
 #include "SDL_system.h"
 
-#if defined(SDL_VIDEO_RENDER_D3D) && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_D3D
 
 #include "../../core/windows/SDL_windows.h"
 
@@ -34,7 +34,7 @@
 #include "../SDL_d3dmath.h"
 #include "../../video/windows/SDL_windowsvideo.h"
 
-#ifdef SDL_VIDEO_RENDER_D3D
+#if SDL_VIDEO_RENDER_D3D
 #define D3D_DEBUG_INFO
 #include <d3d9.h>
 #endif
@@ -1170,6 +1170,7 @@ static int D3D_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd, v
             if (SDL_memcmp(viewport, &cmd->data.viewport.rect, sizeof(cmd->data.viewport.rect)) != 0) {
                 SDL_copyp(viewport, &cmd->data.viewport.rect);
                 data->drawstate.viewport_dirty = SDL_TRUE;
+                data->drawstate.cliprect_dirty = SDL_TRUE;
             }
             break;
         }
@@ -1446,7 +1447,6 @@ static void D3D_DestroyRenderer(SDL_Renderer *renderer)
         }
         SDL_free(data);
     }
-    SDL_free(renderer);
 }
 
 static int D3D_Reset(SDL_Renderer *renderer)
@@ -1546,9 +1546,8 @@ static int D3D_SetVSync(SDL_Renderer *renderer, const int vsync)
     return 0;
 }
 
-SDL_Renderer *D3D_CreateRenderer(SDL_Window *window, Uint32 flags)
+int D3D_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Uint32 flags)
 {
-    SDL_Renderer *renderer;
     D3D_RenderData *data;
     SDL_SysWMinfo windowinfo;
     HRESULT result;
@@ -1561,24 +1560,14 @@ SDL_Renderer *D3D_CreateRenderer(SDL_Window *window, Uint32 flags)
     SDL_DisplayMode fullscreen_mode;
     int displayIndex;
 
-    renderer = (SDL_Renderer *) SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
-        SDL_OutOfMemory();
-        return NULL;
-    }
-
     data = (D3D_RenderData *)SDL_calloc(1, sizeof(*data));
     if (!data) {
-        SDL_free(renderer);
-        SDL_OutOfMemory();
-        return NULL;
+        return SDL_OutOfMemory();
     }
 
     if (!D3D_LoadDLL(&data->d3dDLL, &data->d3d)) {
-        SDL_free(renderer);
         SDL_free(data);
-        SDL_SetError("Unable to create Direct3D interface");
-        return NULL;
+        return SDL_SetError("Unable to create Direct3D interface");
     }
 
     renderer->WindowEvent = D3D_WindowEvent;
@@ -1609,7 +1598,11 @@ SDL_Renderer *D3D_CreateRenderer(SDL_Window *window, Uint32 flags)
     renderer->driverdata = data;
 
     SDL_VERSION(&windowinfo.version);
-    SDL_GetWindowWMInfo(window, &windowinfo);
+    if (!SDL_GetWindowWMInfo(window, &windowinfo) ||
+        windowinfo.subsystem != SDL_SYSWM_WINDOWS) {
+        SDL_free(data);
+        return SDL_SetError("Couldn't get window handle");
+    }
 
     window_flags = SDL_GetWindowFlags(window);
     SDL_GetWindowSizeInPixels(window, &w, &h);
@@ -1661,23 +1654,20 @@ SDL_Renderer *D3D_CreateRenderer(SDL_Window *window, Uint32 flags)
                                      &pparams, &data->device);
     if (FAILED(result)) {
         D3D_DestroyRenderer(renderer);
-        D3D_SetError("CreateDevice()", result);
-        return NULL;
+        return D3D_SetError("CreateDevice()", result);
     }
 
     /* Get presentation parameters to fill info */
     result = IDirect3DDevice9_GetSwapChain(data->device, 0, &chain);
     if (FAILED(result)) {
         D3D_DestroyRenderer(renderer);
-        D3D_SetError("GetSwapChain()", result);
-        return NULL;
+        return D3D_SetError("GetSwapChain()", result);
     }
     result = IDirect3DSwapChain9_GetPresentParameters(chain, &pparams);
     if (FAILED(result)) {
         IDirect3DSwapChain9_Release(chain);
         D3D_DestroyRenderer(renderer);
-        D3D_SetError("GetPresentParameters()", result);
-        return NULL;
+        return D3D_SetError("GetPresentParameters()", result);
     }
     IDirect3DSwapChain9_Release(chain);
     if (pparams.PresentationInterval == D3DPRESENT_INTERVAL_ONE) {
@@ -1719,7 +1709,7 @@ SDL_Renderer *D3D_CreateRenderer(SDL_Window *window, Uint32 flags)
     data->drawstate.cliprect_enabled_dirty = SDL_TRUE;
     data->drawstate.blend = SDL_BLENDMODE_INVALID;
 
-    return renderer;
+    return 0;
 }
 
 SDL_RenderDriver D3D_RenderDriver = {
@@ -1731,7 +1721,7 @@ SDL_RenderDriver D3D_RenderDriver = {
       0,
       0 }
 };
-#endif /* SDL_VIDEO_RENDER_D3D && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_D3D */
 
 #if defined(__WIN32__) || defined(__WINGDK__)
 /* This function needs to always exist on Windows, for the Dynamic API. */
@@ -1739,7 +1729,7 @@ IDirect3DDevice9 *SDL_RenderGetD3D9Device(SDL_Renderer *renderer)
 {
     IDirect3DDevice9 *device = NULL;
 
-#if defined(SDL_VIDEO_RENDER_D3D) && !defined(SDL_RENDER_DISABLED)
+#if SDL_VIDEO_RENDER_D3D
     D3D_RenderData *data = (D3D_RenderData *)renderer->driverdata;
 
     /* Make sure that this is a D3D renderer */
@@ -1752,7 +1742,7 @@ IDirect3DDevice9 *SDL_RenderGetD3D9Device(SDL_Renderer *renderer)
     if (device) {
         IDirect3DDevice9_AddRef(device);
     }
-#endif /* SDL_VIDEO_RENDER_D3D && !SDL_RENDER_DISABLED */
+#endif /* SDL_VIDEO_RENDER_D3D */
 
     return device;
 }

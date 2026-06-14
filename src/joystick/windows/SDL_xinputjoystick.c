@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -39,9 +39,9 @@ extern "C" {
 /*
  * Internal stuff.
  */
-static SDL_bool s_bXInputEnabled = SDL_TRUE;
+static SDL_bool s_bXInputEnabled = SDL_FALSE;
 
-static SDL_bool SDL_XInputUseOldJoystickMapping()
+static SDL_bool SDL_XInputUseOldJoystickMapping(void)
 {
 #ifdef __WINRT__
     /* TODO: remove this __WINRT__ block, but only after integrating with UWP/WinRT's HID API */
@@ -65,11 +65,13 @@ SDL_bool SDL_XINPUT_Enabled(void)
 
 int SDL_XINPUT_JoystickInit(void)
 {
-    s_bXInputEnabled = SDL_GetHintBoolean(SDL_HINT_XINPUT_ENABLED, SDL_TRUE);
+    SDL_bool enabled = SDL_GetHintBoolean(SDL_HINT_XINPUT_ENABLED, SDL_TRUE);
 
-    if (s_bXInputEnabled && WIN_LoadXInputDLL() < 0) {
-        s_bXInputEnabled = SDL_FALSE; /* oh well. */
+    if (enabled && WIN_LoadXInputDLL() < 0) {
+        enabled = SDL_FALSE; /* oh well. */
     }
+    s_bXInputEnabled = enabled;
+
     return 0;
 }
 
@@ -117,7 +119,7 @@ static const char *GetXInputName(const Uint8 userid, BYTE SubType)
 
 static SDL_bool GetXInputDeviceInfo(Uint8 userid, Uint16 *pVID, Uint16 *pPID, Uint16 *pVersion)
 {
-    XINPUT_CAPABILITIES_EX capabilities;
+    SDL_XINPUT_CAPABILITIES_EX capabilities;
 
     if (!XINPUTGETCAPABILITIESEX || XINPUTGETCAPABILITIESEX(1, userid, 0, &capabilities) != ERROR_SUCCESS) {
         return SDL_FALSE;
@@ -143,7 +145,7 @@ static SDL_bool GetXInputDeviceInfo(Uint8 userid, Uint16 *pVID, Uint16 *pPID, Ui
 
 int SDL_XINPUT_GetSteamVirtualGamepadSlot(Uint8 userid)
 {
-    XINPUT_CAPABILITIES_EX capabilities;
+    SDL_XINPUT_CAPABILITIES_EX capabilities;
 
     if (XINPUTGETCAPABILITIESEX &&
         XINPUTGETCAPABILITIESEX(1, userid, 0, &capabilities) == ERROR_SUCCESS &&
@@ -458,6 +460,7 @@ void SDL_XINPUT_JoystickClose(SDL_Joystick *joystick)
 void SDL_XINPUT_JoystickQuit(void)
 {
     if (s_bXInputEnabled) {
+        s_bXInputEnabled = SDL_FALSE;
         WIN_UnloadXInputDLL();
     }
 }

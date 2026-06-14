@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -212,7 +212,7 @@ typedef struct
 #endif /* HAVE_XINPUT_H */
 
 /* This struct is not defined in XInput headers. */
-typedef struct _XINPUT_CAPABILITIES_EX
+typedef struct
 {
     XINPUT_CAPABILITIES Capabilities;
     WORD VendorId;
@@ -220,7 +220,7 @@ typedef struct _XINPUT_CAPABILITIES_EX
     WORD ProductVersion;
     WORD unk1;
     DWORD unk2;
-} XINPUT_CAPABILITIES_EX, *PXINPUT_CAPABILITIES_EX;
+} SDL_XINPUT_CAPABILITIES_EX;
 
 /* Forward decl's for XInput API's we load dynamically and use if available */
 typedef DWORD(WINAPI *XInputGetState_t)(
@@ -244,7 +244,7 @@ typedef DWORD(WINAPI *XInputGetCapabilitiesEx_t)(
     DWORD dwReserved,                       /* [in] Must be 1 */
     DWORD dwUserIndex,                      /* [in] Index of the gamer associated with the device */
     DWORD dwFlags,                          /* [in] Input flags that identify the device type */
-    XINPUT_CAPABILITIES_EX *pCapabilitiesEx /* [out] Receives the capabilities */
+    SDL_XINPUT_CAPABILITIES_EX *pCapabilitiesEx /* [out] Receives the capabilities */
 );
 
 typedef DWORD(WINAPI *XInputGetBatteryInformation_t)(

@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -46,6 +46,9 @@ struct joystick_hwdata
 };
 
 static SDL_HIDAPI_DeviceDriver *SDL_HIDAPI_drivers[] = {
+#ifdef SDL_JOYSTICK_HIDAPI_8BITDO
+    &SDL_HIDAPI_Driver8BitDo,
+#endif
 #ifdef SDL_JOYSTICK_HIDAPI_GAMECUBE
     &SDL_HIDAPI_DriverGameCube,
 #endif
@@ -157,17 +160,17 @@ SDL_bool HIDAPI_SupportsPlaystationDetection(Uint16 vendor, Uint16 product)
     case USB_VENDOR_HORI:
         return SDL_TRUE;
     case USB_VENDOR_LOGITECH:
-        /* Most Logitech devices are fine with this, but there are a few exceptions */
-        if (product == USB_PRODUCT_LOGITECH_F310) {
-            /* The Logitech F310 gamepad will lock up */
-            return SDL_FALSE;
-        }
-        if (product == 0xc33f) {
-            /* The Logitech G815 keyboard will reset the LEDs */
-            return SDL_FALSE;
-        }
-        return SDL_TRUE;
+        /* Most Logitech devices are not PlayStation controllers, and some of them
+         * lock up or reset when we send them the Sony third-party query feature
+         * report, so don't include that vendor here. Instead add devices as
+         * appropriate to controller_list.h
+         */
+        return SDL_FALSE;
     case USB_VENDOR_MADCATZ:
+        if (product == USB_PRODUCT_MADCATZ_SAITEK_SIDE_PANEL_CONTROL_DECK) {
+            /* This is not a Playstation compatible device */
+            return SDL_FALSE;
+        }
         return SDL_TRUE;
     case USB_VENDOR_MAYFLASH:
         return SDL_TRUE;
@@ -183,10 +186,10 @@ SDL_bool HIDAPI_SupportsPlaystationDetection(Uint16 vendor, Uint16 product)
     case USB_VENDOR_QANBA:
         return SDL_TRUE;
     case USB_VENDOR_RAZER:
-        /* Most Razer devices are not game controllers, and some of them lock up
-         * or reset when we send them the Sony third-party query feature report,
-         * so don't include that vendor here. Instead add devices as appropriate
-         * to controller_type.c
+        /* Most Razer devices are not PlayStation controllers, and some of them
+         * lock up or reset when we send them the Sony third-party query feature
+         * report, so don't include that vendor here. Instead add devices as
+         * appropriate to controller_list.h
          *
          * Reference: https://github.com/libsdl-org/SDL/issues/6733
          *            https://github.com/libsdl-org/SDL/issues/6799
@@ -197,7 +200,13 @@ SDL_bool HIDAPI_SupportsPlaystationDetection(Uint16 vendor, Uint16 product)
     case USB_VENDOR_SHANWAN_ALT:
         return SDL_TRUE;
     case USB_VENDOR_THRUSTMASTER:
-        return SDL_TRUE;
+        /* Most of these are wheels, don't have the full set of effects, and
+         * at least in the case of the T248 and T300 RS, the hid-tmff2 driver
+         * puts them in a non-standard report mode and they can't be read.
+         *
+         * If these should use the HIDAPI driver, add them to controller_list.h
+         */
+        return SDL_FALSE;
     case USB_VENDOR_ZEROPLUS:
         return SDL_TRUE;
     case 0x7545 /* SZ-MYPOWER */:
@@ -280,6 +289,7 @@ static SDL_GameControllerType SDL_GetJoystickGameControllerProtocol(const char *
             0x044f, /* Thrustmaster */
             0x045e, /* Microsoft */
             0x0738, /* Mad Catz */
+            0x0b05, /* ASUS */
             0x0e6f, /* PDP */
             0x0f0d, /* Hori */
             0x10f5, /* Turtle Beach */
@@ -815,11 +825,12 @@ SDL_bool HIDAPI_JoystickConnected(SDL_HIDAPI_Device *device, SDL_JoystickID *pJo
 
     ++SDL_HIDAPI_numjoysticks;
 
-    SDL_PrivateJoystickAdded(joystickID);
-
     if (pJoystickID) {
         *pJoystickID = joystickID;
     }
+
+    SDL_PrivateJoystickAdded(joystickID);
+
     return SDL_TRUE;
 }
 
@@ -883,10 +894,8 @@ static SDL_HIDAPI_Device *HIDAPI_AddDevice(const struct SDL_hid_device_info *inf
         return NULL;
     }
     device->magic = &SDL_HIDAPI_device_magic;
-    device->path = SDL_strdup(info->path);
-    if (!device->path) {
-        SDL_free(device);
-        return NULL;
+    if (info->path) {
+        device->path = SDL_strdup(info->path);
     }
     device->seen = SDL_TRUE;
     device->vendor_id = info->vendor_id;
@@ -928,6 +937,7 @@ static SDL_HIDAPI_Device *HIDAPI_AddDevice(const struct SDL_hid_device_info *inf
     device->guid = SDL_CreateJoystickGUID(SDL_HARDWARE_BUS_USB, device->vendor_id, device->product_id, device->version, device->manufacturer_string, device->product_string, 'h', 0);
     device->joystick_type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
     device->type = SDL_GetJoystickGameControllerProtocol(device->name, device->vendor_id, device->product_id, device->interface_number, device->interface_class, device->interface_subclass, device->interface_protocol);
+    device->steam_virtual_gamepad_slot = -1;
 
     if (num_children > 0) {
         int i;
@@ -1007,7 +1017,7 @@ static void HIDAPI_DelDevice(SDL_HIDAPI_Device *device)
     }
 }
 
-static SDL_bool HIDAPI_CreateCombinedJoyCons()
+static SDL_bool HIDAPI_CreateCombinedJoyCons(void)
 {
     SDL_HIDAPI_Device *device, *combined;
     SDL_HIDAPI_Device *joycons[2] = { NULL, NULL };
@@ -1379,6 +1389,12 @@ static const char *HIDAPI_JoystickGetDevicePath(int device_index)
 
 static int HIDAPI_JoystickGetDeviceSteamVirtualGamepadSlot(int device_index)
 {
+    SDL_HIDAPI_Device *device;
+
+    device = HIDAPI_GetDeviceByIndex(device_index, NULL);
+    if (device) {
+        return device->steam_virtual_gamepad_slot;
+    }
     return -1;
 }
 
