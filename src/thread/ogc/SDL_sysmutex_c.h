@@ -20,4 +20,9 @@
 */
 #include "../../SDL_internal.h"
 
+struct SDL_mutex
+{
+    Uint32 lock;
+};
+
 /* vi: set ts=4 sw=4 expandtab: */

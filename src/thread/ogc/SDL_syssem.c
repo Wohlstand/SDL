@@ -74,37 +74,56 @@ void SDL_DestroySemaphore(SDL_sem *sem)
     }
 }
 
-/* TODO: This routine is a bit overloaded.
- * If the timeout is 0 then just poll the semaphore; if it's SDL_MUTEX_MAXWAIT, pass
- * NULL to sceKernelWaitSema() so that it waits indefinitely; and if the timeout
- * is specified, convert it to microseconds. */
+int SDL_SemTryWait(SDL_sem *sem)
+{
+    int retval;
+    u32 val;
+
+    if(!sem) {
+        return SDL_InvalidParamError("sem");
+    }
+
+    retval = SDL_MUTEX_TIMEDOUT;
+
+    if (LWP_SemGetValue(sem->semid, &val) == 0 && LWP_SemWait(sem->semid) == 0) {
+        retval = 0;
+    }
+
+    return retval;
+}
+
+int SDL_SemWait(SDL_sem *sem)
+{
+    int retval;
+
+    if(!sem) {
+        return SDL_InvalidParamError("sem");
+    }
+
+    retval = SDL_MUTEX_TIMEDOUT;
+
+    if (LWP_SemWait(sem->semid) == 0) {
+        retval = 0;
+    }
+
+    return retval;
+}
+
 int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
 {
-    s32 res;
     u32 val;
     Uint32 ticks;
 
-    if (sem == NULL) {
-        SDL_InvalidParamError("sem");
-        return 0;
+    if (!sem) {
+        return SDL_InvalidParamError("sem");
     }
 
+    /* Try the easy cases first */
     if (timeout == 0) {
-        LWP_SemGetValue(sem->semid, &val);
-        if (val == 0) {
-            return SDL_MUTEX_TIMEDOUT;
-        } else {
-            LWP_SemWait(sem->semid);
-            return 0;
-        }
+        return SDL_SemTryWait(sem);
     }
-
     if (timeout == SDL_MUTEX_MAXWAIT) {
-        res = LWP_SemWait(sem->semid);
-        if (res < 0) {
-            return SDL_MUTEX_TIMEDOUT;
-        }
-        return 0;
+        return SDL_SemWait(sem);
     }
 
     ticks = SDL_GetTicks();
@@ -120,29 +139,17 @@ int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
     return SDL_MUTEX_TIMEDOUT;
 }
 
-int SDL_SemTryWait(SDL_sem *sem)
-{
-    return SDL_SemWaitTimeout(sem, 0);
-}
-
-int SDL_SemWait(SDL_sem *sem)
-{
-    return SDL_SemWaitTimeout(sem, SDL_MUTEX_MAXWAIT);
-}
-
 /* Returns the current count of the semaphore */
 Uint32 SDL_SemValue(SDL_sem *sem)
 {
     u32 val;
-    s32 ret;
 
-    if (sem == NULL) {
+    if (!sem) {
         SDL_InvalidParamError("sem");
         return 0;
     }
 
-    ret = LWP_SemGetValue(sem->semid, &val);
-    if (ret >= 0) {
+    if (LWP_SemGetValue(sem->semid, &val) == 0) {
         return val;
     }
 

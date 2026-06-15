@@ -57,8 +57,7 @@ SDL_mutex *SDL_CreateMutex(void)
 }
 
 /* Free the mutex */
-void
-SDL_DestroyMutex(SDL_mutex * mutex)
+void SDL_DestroyMutex(SDL_mutex * mutex)
 {
     if (mutex) {
         if (mutex->lock != LWP_MUTEX_NULL) {
