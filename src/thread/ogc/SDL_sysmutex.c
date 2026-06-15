@@ -33,22 +33,22 @@ struct SDL_mutex
 };
 
 /* Create a mutex */
-SDL_mutex *
-SDL_CreateMutex(void)
+SDL_mutex *SDL_CreateMutex(void)
 {
     SDL_mutex *mutex = NULL;
     s32 res = 0;
 
     /* Allocate mutex memory */
-    mutex = (SDL_mutex *) SDL_malloc(sizeof(*mutex));
+    mutex = (SDL_mutex *)SDL_calloc(1, sizeof(*mutex));
     if (mutex) {
         mutex->lock = LWP_MUTEX_NULL;
 
-        res = LWP_MutexInit(&mutex->lock, 0);
+        res = LWP_MutexInit(&mutex->lock, 1);
 
         if (res < 0) {
-            mutex->lock = LWP_MUTEX_NULL;
             SDL_SetError("Error trying to create mutex: %x", res);
+            SDL_free(mutex);
+            mutex = NULL;
         }
     } else {
         SDL_OutOfMemory();
@@ -69,15 +69,11 @@ SDL_DestroyMutex(SDL_mutex * mutex)
 }
 
 /* Try to lock the mutex */
-int
-SDL_TryLockMutex(SDL_mutex * mutex)
+int SDL_TryLockMutex(SDL_mutex * mutex)
 {
-#ifdef SDL_THREADS_DISABLED
-    return 0;
-#else
     s32 res = 0;
     if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
-        return SDL_InvalidParamError("mutex");
+        return 0;
     }
 
     res = LWP_MutexTryLock(mutex->lock);
@@ -94,20 +90,16 @@ SDL_TryLockMutex(SDL_mutex * mutex)
     }
 
     return -1;
-#endif /* SDL_THREADS_DISABLED */
 }
 
 
 /* Lock the mutex */
-int
-SDL_mutexP(SDL_mutex * mutex)
+int SDL_LockMutex(SDL_mutex * mutex) SDL_NO_THREAD_SAFETY_ANALYSIS
 {
-#ifdef SDL_THREADS_DISABLED
-    return 0;
-#else
     s32 res = 0;
+
     if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
-        return SDL_InvalidParamError("mutex");
+        return 0;
     }
 
     res = LWP_MutexLock(mutex->lock);
@@ -116,20 +108,15 @@ SDL_mutexP(SDL_mutex * mutex)
     }
 
     return 0;
-#endif /* SDL_THREADS_DISABLED */
 }
 
 /* Unlock the mutex */
-int
-SDL_mutexV(SDL_mutex * mutex)
+int SDL_UnlockMutex(SDL_mutex * mutex) SDL_NO_THREAD_SAFETY_ANALYSIS
 {
-#ifdef SDL_THREADS_DISABLED
-    return 0;
-#else
     s32 res = 0;
 
     if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
-        return SDL_InvalidParamError("mutex");
+        return 0;
     }
 
     res = LWP_MutexUnlock(mutex->lock);
@@ -138,7 +125,6 @@ SDL_mutexV(SDL_mutex * mutex)
     }
 
     return 0;
-#endif /* SDL_THREADS_DISABLED */
 }
 
 #endif /* SDL_THREAD_OGC */

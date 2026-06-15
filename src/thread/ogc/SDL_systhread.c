@@ -47,7 +47,7 @@
 
 static void *ThreadEntry(void *argp)
 {
-    SDL_RunThread(*(SDL_Thread **) argp);
+    SDL_RunThread(*(SDL_Thread **)argp);
     return NULL;
 }
 
@@ -98,12 +98,13 @@ void SDL_SYS_SetupThread(const char *name)
 
 SDL_threadID SDL_ThreadID(void)
 {
-    return (SDL_threadID) LWP_GetSelf();
+    return (SDL_threadID)LWP_GetSelf();
 }
 
 void SDL_SYS_WaitThread(SDL_Thread *thread)
 {
-    LWP_JoinThread(thread->handle, NULL);
+    void *v;
+    LWP_JoinThread(thread->handle, &v);
     thread->handle = LWP_THREAD_NULL;
 }
 
@@ -115,7 +116,6 @@ void SDL_SYS_DetachThread(SDL_Thread *thread)
 
 int SDL_SYS_SetThreadPriority(SDL_ThreadPriority priority)
 {
-    lwp_t self = LWP_GetSelf();
     int value = 0;
 
     switch(priority) {
@@ -123,17 +123,17 @@ int SDL_SYS_SetThreadPriority(SDL_ThreadPriority priority)
             value = 0;
             break;
         case SDL_THREAD_PRIORITY_NORMAL:
-            value = 1;
+            value = 64;
             break;
         case SDL_THREAD_PRIORITY_HIGH:
-            value = 2;
+            value = 80;
             break;
         case SDL_THREAD_PRIORITY_TIME_CRITICAL:
-            value = 3;
+            value = 127;
             break;
     }
 
-    LWP_SetThreadPriority(self, value);
+    LWP_SetThreadPriority(LWP_THREAD_NULL, value);
 
     return 0;
 }
