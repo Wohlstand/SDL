@@ -39,55 +39,53 @@
 #include "SDL_filesystem.h"
 #include "SDL_rwops.h"
 
-char *
-SDL_GetBasePath(void)
+static inline int create_dir(const char *dirname)
 {
-    const char *basepath = "/";
-    char *retval = SDL_strdup(basepath);
-    return retval;
+    int result = mkdir(dirname, 0666);
+
+    if (result == -1 && errno != EEXIST) {
+        return SDL_SetError("Failed to create '%s' (%s)", dirname, strerror(errno));
+    }
+    return 0;
 }
 
-char *
-SDL_GetPrefPath(const char *org, const char *app)
+char *SDL_GetBasePath(void)
 {
-    const char *envr = "/apps/";
-    char *retval = NULL;
-    char *ptr = NULL;
-    size_t len = 0;
+    char buffer[256];
+    size_t len;
 
+    if (!getcwd(buffer, sizeof(buffer) - 1)) {
+        return "/";
+    }
+
+    len = strlen(buffer);
+    if (len > 0 && buffer[len - 1] != '/') {
+        buffer[len] = '/';
+        buffer[len + 1] = '\0';
+    }
+
+    return SDL_strdup(buffer);
+}
+
+char *SDL_GetPrefPath(const char *org, const char *app)
+{
+    char *pref_path = NULL;
     if (!app) {
         SDL_InvalidParamError("app");
         return NULL;
     }
-    if (!org) {
-        org = "";
-    }
 
-    len = SDL_strlen(envr);
-
-    len += SDL_strlen(org) + SDL_strlen(app) + 3;
-    retval = (char *) SDL_malloc(len);
-    if (!retval) {
-        SDL_OutOfMemory();
+    SDL_asprintf(&pref_path, "/apps/%s/", app);
+    if (!pref_path) {
         return NULL;
     }
 
-    if (*org) {
-        SDL_snprintf(retval, len, "%s%s/%s/", envr, org, app);
-    } else {
-        SDL_snprintf(retval, len, "%s%s/", envr, app);
+    if (create_dir(pref_path) < 0) {
+        SDL_free(pref_path);
+        return NULL;
     }
 
-    for (ptr = retval+1; *ptr; ptr++) {
-        if (*ptr == '/') {
-            *ptr = '\0';
-            mkdir(retval, 0777);
-            *ptr = '/';
-        }
-    }
-    mkdir(retval, 0777);
-
-    return retval;
+    return pref_path;
 }
 
 #endif /* SDL_FILESYSTEM_WII */
