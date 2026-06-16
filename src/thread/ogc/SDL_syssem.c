@@ -22,19 +22,19 @@
 
 #if SDL_THREAD_OGC
 
-/* Semaphore functions for the libOGC. */
-
-#include <stdio.h>
-#include <stdlib.h>
+/* An implementation of semaphores using mutexes and condition variables */
 
 #include "SDL_error.h"
+#include "SDL_timer.h"
 #include "SDL_thread.h"
+#include "SDL_systhread_c.h"
 #include "SDL_timer.h"
 
-#include <ogc/semaphore.h>
-
 struct SDL_semaphore {
-    sem_t  semid;
+    Uint32 count;
+    Uint32 waiters_count;
+    SDL_mutex *count_lock;
+    SDL_cond *count_nonzero;
 };
 
 
@@ -42,20 +42,20 @@ struct SDL_semaphore {
 SDL_sem *SDL_CreateSemaphore(Uint32 initial_value)
 {
     SDL_sem *sem;
-    s32 ret;
 
     sem = (SDL_sem *) SDL_malloc(sizeof(*sem));
-    if (sem != NULL) {
-        sem->semid = LWP_SEM_NULL;
-
-        ret = LWP_SemInit(&sem->semid, initial_value, 255);
-        if (ret < 0) {
-            SDL_SetError("Couldn't create semaphore");
-            SDL_free(sem);
-            sem = NULL;
-        }
-    } else {
+    if (!sem) {
         SDL_OutOfMemory();
+        return NULL;
+    }
+    sem->count = initial_value;
+    sem->waiters_count = 0;
+
+    sem->count_lock = SDL_CreateMutex();
+    sem->count_nonzero = SDL_CreateCond();
+    if (!sem->count_lock || !sem->count_nonzero) {
+        SDL_DestroySemaphore(sem);
+        return NULL;
     }
 
     return sem;
@@ -64,12 +64,18 @@ SDL_sem *SDL_CreateSemaphore(Uint32 initial_value)
 /* Free the semaphore */
 void SDL_DestroySemaphore(SDL_sem *sem)
 {
-    if (sem != NULL) {
-        if (sem->semid > 0) {
-            LWP_SemDestroy(sem->semid);
-            sem->semid = LWP_SEM_NULL;
+    if (sem) {
+        sem->count = 0xFFFFFFFF;
+        while (sem->waiters_count > 0) {
+            SDL_CondSignal(sem->count_nonzero);
+            SDL_Delay(10);
         }
-
+        SDL_DestroyCond(sem->count_nonzero);
+        if (sem->count_lock) {
+            SDL_mutexP(sem->count_lock);
+            SDL_mutexV(sem->count_lock);
+            SDL_DestroyMutex(sem->count_lock);
+        }
         SDL_free(sem);
     }
 }
@@ -77,97 +83,81 @@ void SDL_DestroySemaphore(SDL_sem *sem)
 int SDL_SemTryWait(SDL_sem *sem)
 {
     int retval;
-    u32 val;
 
     if(!sem) {
         return SDL_InvalidParamError("sem");
     }
 
     retval = SDL_MUTEX_TIMEDOUT;
-
-    if (LWP_SemGetValue(sem->semid, &val) == 0 && LWP_SemWait(sem->semid) == 0) {
+    SDL_LockMutex(sem->count_lock);
+    if (sem->count > 0) {
+        --sem->count;
         retval = 0;
     }
+    SDL_UnlockMutex(sem->count_lock);
 
     return retval;
 }
 
 int SDL_SemWait(SDL_sem *sem)
 {
-    int retval;
-
-    if(!sem) {
-        return SDL_InvalidParamError("sem");
-    }
-
-    retval = SDL_MUTEX_TIMEDOUT;
-
-    if (LWP_SemWait(sem->semid) == 0) {
-        retval = 0;
-    }
-
-    return retval;
+    return SDL_SemWaitTimeout(sem, SDL_MUTEX_MAXWAIT);
 }
 
 int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
 {
-    u32 val;
-    Uint32 ticks;
+    int retval;
 
     if (!sem) {
         return SDL_InvalidParamError("sem");
     }
 
-    /* Try the easy cases first */
+    /* A timeout of 0 is an easy case */
     if (timeout == 0) {
         return SDL_SemTryWait(sem);
     }
-    if (timeout == SDL_MUTEX_MAXWAIT) {
-        return SDL_SemWait(sem);
-    }
 
-    ticks = SDL_GetTicks();
-    while (SDL_GetTicks() - ticks < timeout) {
-        val = SDL_SemValue(sem);
-        if (val > 0) {
-            LWP_SemWait(sem->semid);
-            return 0;
-        }
-        SDL_Delay(1);
+    SDL_LockMutex(sem->count_lock);
+    ++sem->waiters_count;
+    retval = 0;
+    while ((sem->count == 0) && (retval != SDL_MUTEX_TIMEDOUT)) {
+        retval = SDL_CondWaitTimeout(sem->count_nonzero, sem->count_lock,
+                timeout);
     }
+    --sem->waiters_count;
+    --sem->count;
+    SDL_UnlockMutex(sem->count_lock);
 
-    return SDL_MUTEX_TIMEDOUT;
+    return retval;
 }
 
 /* Returns the current count of the semaphore */
 Uint32 SDL_SemValue(SDL_sem *sem)
 {
-    u32 val;
+    Uint32 value;
 
-    if (!sem) {
-        SDL_InvalidParamError("sem");
-        return 0;
+    value = 0;
+    if (sem) {
+        SDL_LockMutex(sem->count_lock);
+        value = sem->count;
+        SDL_UnlockMutex(sem->count_lock);
     }
-
-    if (LWP_SemGetValue(sem->semid, &val) == 0) {
-        return val;
-    }
-
-    return 0;
+    return value;
 }
 
 int SDL_SemPost(SDL_sem *sem)
 {
-    int res;
-
-    if (sem == NULL) {
-        return SDL_InvalidParamError("sem");
+    if (!sem) {
+        SDL_SetError("Passed a NULL semaphore");
+        return -1;
     }
 
-    res = LWP_SemPost(sem->semid);
-    if (res < 0) {
-        return SDL_SetError("LWP_SemPost() failed");
+    SDL_LockMutex(sem->count_lock);
+    if (sem->waiters_count > 0) {
+        SDL_CondSignal(sem->count_nonzero);
     }
+    ++sem->count;
+    SDL_UnlockMutex(sem->count_lock);
 
     return 0;
 }
