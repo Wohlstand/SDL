@@ -31,22 +31,49 @@
 #include "SDL_thread.h"
 #include "SDL_sysmutex_c.h"
 
-#include <ogcsys.h>
-#include <ogc/cond.h>
 #include <ogc/lwp_watchdog.h>
+#include <tuxedo/sync.h>
 
 struct SDL_cond
 {
-    cond_t cond;
+    int slot;
+    KCondVar *cv;
 };
 
-static KCondVar* lwpc_get_condvar(cond_t cond)
+/* It's possible to initialize 65535 different condition slots */
+static Uint64 s_cond_alloc[1024];
+
+static int s_cond_alloc_slot()
 {
-    if (!cond || cond == LWP_COND_NULL) {
-        return NULL;
+    size_t i = 0;
+    u64 *used;
+    int slot;
+    PPCIrqState st = PPCIrqLockByMsr();
+
+    for(i = 0; i < 1024; ++i)
+    {
+        used = &s_cond_alloc[i];
+        slot = __builtin_ffsll(~*used) - 1;
+
+        if (slot >= 0) {
+            *used |= 1ULL << slot;
+            slot += (i << 6);
+            break;
+        }
     }
 
-    return (KCondVar*)(0xc0000000 + cond);
+    PPCIrqUnlockByMsr(st);
+
+    return slot;
+}
+
+static void s_cond_free_slot(int slot)
+{
+    PPCIrqState st = PPCIrqLockByMsr();
+    size_t i = (slot >> 6) & 1023;
+    u64* used = &s_cond_alloc[i];
+    *used &= ~(1ULL << slot);
+    PPCIrqUnlockByMsr(st);
 }
 
 /* Create a condition variable */
@@ -54,12 +81,16 @@ SDL_cond *SDL_CreateCond(void)
 {
     SDL_cond *cond;
 
-    cond = (SDL_cond *) SDL_malloc(sizeof(SDL_cond));
+    cond = (SDL_cond *)SDL_calloc(1, sizeof(SDL_cond));
     if (cond) {
-        if (LWP_CondInit(&(cond->cond)) < 0) {
+        cond->slot = s_cond_alloc_slot();
+        if (cond->slot < 0) {
+            SDL_SetError("Can't initialize the cond");
             SDL_DestroyCond(cond);
             cond = NULL;
         }
+
+        cond->cv = (KCondVar*)0xc0000000 + cond->slot + 1;
     } else {
         SDL_OutOfMemory();
     }
@@ -70,7 +101,9 @@ SDL_cond *SDL_CreateCond(void)
 void SDL_DestroyCond(SDL_cond * cond)
 {
     if (cond) {
-        LWP_CondDestroy(cond->cond);
+        if (cond->slot >= 0) {
+            s_cond_free_slot(cond->slot);
+        }
         SDL_free(cond);
     }
 }
@@ -83,7 +116,9 @@ int SDL_CondSignal(SDL_cond * cond)
         return -1;
     }
 
-    return LWP_CondSignal(cond->cond) == 0 ? 0 : -1;
+    KCondVarSignal(cond->cv);
+
+    return 0;
 }
 
 /* Restart all threads that are waiting on the condition variable */
@@ -94,7 +129,9 @@ int SDL_CondBroadcast(SDL_cond * cond)
         return -1;
     }
 
-    return LWP_CondBroadcast(cond->cond) == 0 ? 0 : -1;
+    KCondVarBroadcast(cond->cv);
+
+    return 0;
 }
 
 /* Wait on the condition variable for at most 'ms' milliseconds.
@@ -121,41 +158,52 @@ Thread B:
 int SDL_CondWaitTimeout(SDL_cond *cond, SDL_mutex *mutex, Uint32 ms)
 {
     struct timespec time;
-    KCondVar* cv;
+    u32 counter_backup;
+    int ret;
 
     if (!cond) {
         SDL_SetError("Passed a NULL condition variable");
         return -1;
     }
 
-    cv = lwpc_get_condvar(cond->cond);
-    if (!cv) {
+    if (!cond->cv) {
         return -1;
     }
 
-    //LWP_CondTimedWait expects relative timeout
+    /* LWP_CondTimedWait expects relative timeout */
     time.tv_sec = (ms / 1000);
     time.tv_nsec = (ms % 1000) * 1000000;
 
-    return KCondVarWaitTimeoutTicks(cv, &mutex->lock.mutex, timespec_to_ticks(&time)) ? 0 : SDL_MUTEX_TIMEDOUT;
+    counter_backup = mutex->lock.counter;
+    mutex->lock.counter = 0;
+
+    ret = KCondVarWaitTimeoutTicks(cond->cv, (KMutex*)&mutex->lock, timespec_to_ticks(&time));
+
+    mutex->lock.counter = counter_backup;
+
+    return ret ? 0 : SDL_MUTEX_TIMEDOUT;
 }
 
 /* Wait on the condition variable forever */
 int SDL_CondWait(SDL_cond * cond, SDL_mutex * mutex)
 {
-    KCondVar* cv;
+    u32 counter_backup;
 
     if (!cond) {
         SDL_SetError("Passed a NULL condition variable");
         return -1;
     }
 
-    cv = lwpc_get_condvar(cond->cond);
-    if (!cv) {
+    if (!cond->cv) {
         return -1;
     }
 
-    KCondVarWait(cv, &mutex->lock.mutex);
+    counter_backup = mutex->lock.counter;
+    mutex->lock.counter = 0;
+
+    KCondVarWait(cond->cv, (KMutex*)&mutex->lock);
+
+    mutex->lock.counter = counter_backup;
 
     return 0;
 }

@@ -38,7 +38,7 @@ SDL_mutex *SDL_CreateMutex(void)
     SDL_mutex *mutex = NULL;
 
     /* Allocate mutex memory */
-    mutex = (SDL_mutex *)SDL_calloc(1, sizeof(*mutex));
+    mutex = (SDL_mutex *)SDL_calloc(1, sizeof(SDL_mutex));
     if (!mutex) {
         SDL_OutOfMemory();
     }
