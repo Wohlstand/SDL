@@ -33,11 +33,21 @@
 
 #include <ogcsys.h>
 #include <ogc/cond.h>
+#include <ogc/lwp_watchdog.h>
 
 struct SDL_cond
 {
     cond_t cond;
 };
+
+static KCondVar* lwpc_get_condvar(cond_t cond)
+{
+    if (!cond || cond == LWP_COND_NULL) {
+        return NULL;
+    }
+
+    return (KCondVar*)(0xc0000000 + cond);
+}
 
 /* Create a condition variable */
 SDL_cond *SDL_CreateCond(void)
@@ -108,25 +118,46 @@ Thread B:
     SDL_CondSignal(cond);
     SDL_UnlockMutex(lock);
  */
-int SDL_CondWaitTimeout(SDL_cond * cond, SDL_mutex * mutex, Uint32 ms)
+int SDL_CondWaitTimeout(SDL_cond *cond, SDL_mutex *mutex, Uint32 ms)
 {
     struct timespec time;
+    KCondVar* cv;
 
     if (!cond) {
         SDL_SetError("Passed a NULL condition variable");
         return -1;
     }
+
+    cv = lwpc_get_condvar(cond->cond);
+    if (!cv) {
+        return -1;
+    }
+
     //LWP_CondTimedWait expects relative timeout
     time.tv_sec = (ms / 1000);
     time.tv_nsec = (ms % 1000) * 1000000;
 
-    return LWP_CondTimedWait(cond->cond, mutex->lock, &time);
+    return KCondVarWaitTimeoutTicks(cv, &mutex->lock.mutex, timespec_to_ticks(&time)) ? 0 : SDL_MUTEX_TIMEDOUT;
 }
 
 /* Wait on the condition variable forever */
 int SDL_CondWait(SDL_cond * cond, SDL_mutex * mutex)
 {
-    return LWP_CondWait(cond->cond, mutex->lock);
+    KCondVar* cv;
+
+    if (!cond) {
+        SDL_SetError("Passed a NULL condition variable");
+        return -1;
+    }
+
+    cv = lwpc_get_condvar(cond->cond);
+    if (!cv) {
+        return -1;
+    }
+
+    KCondVarWait(cv, &mutex->lock.mutex);
+
+    return 0;
 }
 
 #endif /* SDL_THREAD_OGC */

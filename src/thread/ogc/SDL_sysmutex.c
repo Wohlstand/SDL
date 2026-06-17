@@ -25,34 +25,24 @@
 #include "SDL_thread.h"
 #include "SDL_systhread_c.h"
 
-#include <ogc/mutex.h>
+#include <tuxedo/sync.h>
 
 struct SDL_mutex
 {
-    mutex_t lock;
+    KRMutex lock;
 };
 
 /* Create a mutex */
 SDL_mutex *SDL_CreateMutex(void)
 {
     SDL_mutex *mutex = NULL;
-    s32 res = 0;
 
     /* Allocate mutex memory */
     mutex = (SDL_mutex *)SDL_calloc(1, sizeof(*mutex));
-    if (mutex) {
-        mutex->lock = LWP_MUTEX_NULL;
-
-        res = LWP_MutexInit(&mutex->lock, 1);
-
-        if (res < 0) {
-            SDL_SetError("Error trying to create mutex: %x", res);
-            SDL_free(mutex);
-            mutex = NULL;
-        }
-    } else {
+    if (!mutex) {
         SDL_OutOfMemory();
     }
+
     return mutex;
 }
 
@@ -60,9 +50,6 @@ SDL_mutex *SDL_CreateMutex(void)
 void SDL_DestroyMutex(SDL_mutex * mutex)
 {
     if (mutex) {
-        if (mutex->lock != LWP_MUTEX_NULL) {
-            LWP_MutexDestroy(mutex->lock);
-        }
         SDL_free(mutex);
     }
 }
@@ -70,59 +57,36 @@ void SDL_DestroyMutex(SDL_mutex * mutex)
 /* Try to lock the mutex */
 int SDL_TryLockMutex(SDL_mutex * mutex)
 {
-    s32 res = 0;
-    if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
+    bool rc;
+    if (!mutex) {
         return 0;
     }
 
-    res = LWP_MutexTryLock(mutex->lock);
-    switch (res) {
-        case 0:
-            return 0;
-            break;
-        case 1:
-            return SDL_MUTEX_TIMEDOUT;
-            break;
-        default:
-            return SDL_SetError("Error trying to lock mutex: %x", res);
-            break;
-    }
+    rc = KRMutexTryLock(&mutex->lock);
 
-    return -1;
+    return rc ? 0 : SDL_MUTEX_TIMEDOUT;
 }
 
 
 /* Lock the mutex */
 int SDL_LockMutex(SDL_mutex * mutex) SDL_NO_THREAD_SAFETY_ANALYSIS
 {
-    s32 res = 0;
-
-    if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
+    if (!mutex) {
         return 0;
     }
 
-    res = LWP_MutexLock(mutex->lock);
-    if (res < 0) {
-        return SDL_SetError("Error trying to lock mutex: %x", res);
-    }
-
+    KRMutexLock(&mutex->lock);
     return 0;
 }
 
 /* Unlock the mutex */
 int SDL_UnlockMutex(SDL_mutex * mutex) SDL_NO_THREAD_SAFETY_ANALYSIS
 {
-    s32 res = 0;
-
-    if (mutex == NULL || mutex->lock == LWP_MUTEX_NULL) {
+    if (!mutex) {
         return 0;
     }
 
-    res = LWP_MutexUnlock(mutex->lock);
-    if (res < 0) {
-        return SDL_SetError("Error trying to unlock mutex: %x", res);
-    }
-
+    KRMutexUnlock(&mutex->lock);
     return 0;
 }
 

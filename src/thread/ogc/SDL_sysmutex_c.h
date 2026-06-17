@@ -20,9 +20,11 @@
 */
 #include "../../SDL_internal.h"
 
+#include <tuxedo/sync.h>
+
 struct SDL_mutex
 {
-    Uint32 lock;
+    KRMutex lock;
 };
 
 /* vi: set ts=4 sw=4 expandtab: */
