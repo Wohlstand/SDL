@@ -125,7 +125,8 @@ int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
                 timeout);
     }
     --sem->waiters_count;
-    --sem->count;
+    if(retval != SDL_MUTEX_TIMEDOUT)
+        --sem->count;
     SDL_UnlockMutex(sem->count_lock);
 
     return retval;
